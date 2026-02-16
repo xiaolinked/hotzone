@@ -8,7 +8,7 @@
         "inter_wave_pause_time": 2
     },
     "hero": {
-        "base_hp": 80,
+        "base_hp": 100,
         "base_armor": 0,
         "move_speed": 10.0,
         "armor": {
@@ -29,16 +29,9 @@
         "dash": {
             "distance": 6.0,
             "stamina_cost": 20,
-            "cooldown": 0.15,
+            "cooldown": 0.25,
             "duration": 0.2,
             "iframe_duration": 0.2
-        },
-        "push_back": {
-            "distance": 5.0,
-            "radius": 1.8,
-            "cooldown": 2.4,
-            "force_priority": 1.0,
-            "visual_duration": 0.2
         }
     },
     "blaster": {
@@ -82,8 +75,8 @@
             "max_distance_from_hero": 25
         },
         "scaling": {
-            "hp_per_wave": 1.15,
-            "shield_per_wave": 1.1,
+            "hp_per_wave": 1.10,
+            "shield_per_wave": 1.08,
             "speed_per_wave": 1.03
         }
     },
@@ -179,6 +172,8 @@
     },
     "shop": {
         "options_per_wave": 3,
+        "reroll_base_cost": 10,
+        "reroll_cost_increase": 5,
         "upgrades": [
             {
                 "type": "damage",

@@ -7,6 +7,7 @@ export class Bullet extends Entity {
     public damage: number;
     private maxLifetime: number; // Range / Speed
     private lifetime: number = 0;
+    private angle: number = 0;
 
     constructor(x: number, y: number, targetX: number, targetY: number) {
         super(x, y);
@@ -19,6 +20,8 @@ export class Bullet extends Entity {
         const dx = targetX - x;
         const dy = targetY - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+
+        this.angle = Math.atan2(dy, dx);
 
         this.velocity = {
             x: (dx / dist) * speed,
@@ -47,8 +50,6 @@ export class Bullet extends Entity {
             return;
         }
 
-
-
         // Collision with Enemies
         for (const enemy of game.enemies) {
             if (this.distanceTo(enemy) < (this.radius + enemy.getCollisionRadius())) {
@@ -62,12 +63,36 @@ export class Bullet extends Entity {
     public draw(ctx: CanvasRenderingContext2D): void {
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        // ctx.shadowBlur = 4;
-        // ctx.shadowColor = this.color;
-        ctx.fillStyle = this.color;
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        // Tracer trail (elongated glow behind bullet)
+        const trailGrad = ctx.createLinearGradient(-0.6, 0, 0.1, 0);
+        trailGrad.addColorStop(0, 'rgba(0, 255, 255, 0)');
+        trailGrad.addColorStop(0.4, 'rgba(0, 200, 255, 0.15)');
+        trailGrad.addColorStop(1, 'rgba(0, 255, 255, 0.4)');
+        ctx.fillStyle = trailGrad;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.ellipse(-0.2, 0, 0.45, 0.06, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        // Bullet body (elongated capsule)
+        const bodyGrad = ctx.createLinearGradient(-0.15, 0, 0.2, 0);
+        bodyGrad.addColorStop(0, '#005577');
+        bodyGrad.addColorStop(0.3, '#00CCEE');
+        bodyGrad.addColorStop(0.7, '#88FFFF');
+        bodyGrad.addColorStop(1, '#FFFFFF');
+        ctx.fillStyle = bodyGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 0.18, 0.055, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hot tip (bright white point at front)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0.14, 0, 0.03, 0, Math.PI * 2);
+        ctx.fill();
+
         ctx.restore();
     }
 }

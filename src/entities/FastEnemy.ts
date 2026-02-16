@@ -8,11 +8,11 @@ export class FastEnemy extends Enemy {
         this.maxHp = 10;
         this.hp = this.maxHp;
 
-        this.maxShield = 10;
+        this.maxShield = 1;
         this.shield = this.maxShield;
 
-        this.speed = 12.0; // Faster than hero (Base is 10.0)
-        this.chargeSpeed = 16.0; // Extremely fast when armed
+        this.speed = 8.0; // Fast but manageable
+        this.chargeSpeed = 12.0; // Fast when armed
         this.shieldRadius = 1.4;
 
         this.color = '#FF3333'; // Bright Red
@@ -29,11 +29,6 @@ export class FastEnemy extends Enemy {
         ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.x, this.y);
-        ctx.scale(1.1, 1.1);
-
-        // Bloom
-        // ctx.shadowBlur = 10;
-        // ctx.shadowColor = this.color;
 
         // Shield
         if (this.shield > 0) {
@@ -42,65 +37,79 @@ export class FastEnemy extends Enemy {
             ctx.globalAlpha = 0.7 * this.opacity;
             ctx.lineWidth = 0.05;
             ctx.beginPath();
-            ctx.arc(0, 0, this.shieldRadius, 0, Math.PI * 2); // Smaller shield radius
+            ctx.arc(0, 0, this.shieldRadius, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
 
-        const isFacingLeft = Math.abs(this.angle) > Math.PI / 2;
-        if (isFacingLeft) {
-            ctx.scale(-1, 1);
+        // Rotate to face direction
+        ctx.rotate(this.angle);
+
+        // --- SCOUT: Neon glowing DIAMOND (sharp arrow) ---
+        const mainColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#FF3333');
+        const glowColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#FF3333');
+        const r = this.radius;
+
+        // Speed trail lines behind
+        ctx.save();
+        ctx.globalAlpha = 0.25 * this.opacity;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.03;
+        for (let i = 1; i <= 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.6 - i * 0.2, -r * 0.15 * i);
+            ctx.lineTo(-r * 0.6 - i * 0.2 - 0.3, -r * 0.15 * i);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.6 - i * 0.2, r * 0.15 * i);
+            ctx.lineTo(-r * 0.6 - i * 0.2 - 0.3, r * 0.15 * i);
+            ctx.stroke();
         }
-
-        // Apply forward-leaning run tilt
-        ctx.rotate(0.1);
-
-        // --- DRAW CYBER SCOUT RUNNER ---
-        const baseColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#FF3333');
-        const plateColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#800000');
-
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 0.04;
-
-        const runCycle = Math.sin(Date.now() * 0.02 * this.speed) * 0.6;
-
-        // Lean Runner Legs
-        ctx.fillStyle = '#000';
-        // Left
-        ctx.save();
-        ctx.translate(-0.1, 0.1);
-        ctx.rotate(-runCycle);
-        ctx.fillRect(-0.05, 0, 0.12, 0.45);
-        ctx.strokeRect(-0.05, 0, 0.12, 0.45);
-        ctx.restore();
-        // Right
-        ctx.save();
-        ctx.translate(0.1, 0.1);
-        ctx.rotate(runCycle);
-        ctx.fillRect(-0.05, 0, 0.12, 0.45);
-        ctx.strokeRect(-0.05, 0, 0.12, 0.45);
         ctx.restore();
 
-        // Sleek Hydrodynamic Torso
-        ctx.fillStyle = baseColor;
+        // Outer glow
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = glowColor;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.06;
         ctx.beginPath();
-        ctx.roundRect(-0.2, -0.4, 0.4, 0.5, 0.15);
-        ctx.fill();
+        ctx.moveTo(r * 1.2, 0);        // sharp nose (elongated)
+        ctx.lineTo(0, -r * 0.45);
+        ctx.lineTo(-r * 0.6, 0);
+        ctx.lineTo(0, r * 0.45);
+        ctx.closePath();
         ctx.stroke();
+        ctx.restore();
 
-        // Aerodynamic Head / Sensor
-        ctx.fillStyle = plateColor;
+        // Filled body
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = this.opacity * 0.25;
         ctx.beginPath();
-        ctx.moveTo(0.3, -0.4);
-        ctx.lineTo(-0.2, -0.3);
-        ctx.lineTo(-0.2, -0.5);
+        ctx.moveTo(r * 1.2, 0);
+        ctx.lineTo(0, -r * 0.45);
+        ctx.lineTo(-r * 0.6, 0);
+        ctx.lineTo(0, r * 0.45);
         ctx.closePath();
         ctx.fill();
+        ctx.globalAlpha = this.opacity;
+
+        // Inner detail
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.03;
+        ctx.beginPath();
+        ctx.moveTo(r * 0.6, 0);
+        ctx.lineTo(0, -r * 0.2);
+        ctx.lineTo(-r * 0.3, 0);
+        ctx.lineTo(0, r * 0.2);
+        ctx.closePath();
         ctx.stroke();
 
-        // Glowing Blue Sensor Line
-        ctx.fillStyle = '#00FFFF';
-        ctx.fillRect(0.1, -0.42, 0.15, 0.04);
+        // Cyan eye
+        ctx.fillStyle = this.damageFlash > 0 ? '#FFF' : '#00FFFF';
+        ctx.beginPath();
+        ctx.arc(r * 0.3, 0, 0.05, 0, Math.PI * 2);
+        ctx.fill();
 
         ctx.restore();
 

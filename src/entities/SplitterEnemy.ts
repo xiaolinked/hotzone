@@ -28,7 +28,6 @@ export class SplitterEnemy extends Enemy {
         ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.x, this.y);
-        ctx.scale(1.1, 1.1);
 
         // Shield
         if (this.shield > 0) {
@@ -42,50 +41,72 @@ export class SplitterEnemy extends Enemy {
             ctx.restore();
         }
 
-        const isFacingLeft = Math.abs(this.angle) > Math.PI / 2;
-        if (isFacingLeft) {
-            ctx.scale(-1, 1);
-        }
+        // Slow spin
+        const spin = Date.now() * 0.0008;
+        ctx.rotate(spin);
 
-        // --- DRAW REALISTIC FRACTAL DRONE ---
-        const baseColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#FF69B4');
-        const coreColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#C71585');
+        // --- HIVE MOTHER: Neon glowing OCTAGON ---
+        const mainColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#FF69B4');
+        const glowColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#FF69B4');
+        const r = this.radius;
 
-        ctx.strokeStyle = this.damageFlash > 0 ? '#FFFFFF' : '#333';
-        ctx.lineWidth = 0.05;
-
-        // Modular Housing (3 distinct segments nested)
-        for (let i = 0; i < 3; i++) {
-            const rot = (Math.PI * 2 / 3) * i + (Date.now() * 0.001);
-            ctx.save();
-            ctx.rotate(rot);
-            ctx.fillStyle = coreColor;
+        // Draw octagon helper
+        const drawOct = (size: number) => {
             ctx.beginPath();
-            ctx.roundRect(0.2, -0.3, 0.4, 0.6, 0.1);
-            ctx.fill();
-            ctx.stroke();
+            for (let i = 0; i < 8; i++) {
+                const a = (Math.PI / 4) * i;
+                const px = Math.cos(a) * size;
+                const py = Math.sin(a) * size;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+        };
 
-            // Nested Unit Eye
-            ctx.fillStyle = '#111';
-            ctx.beginPath();
-            ctx.arc(0.45, 0, 0.1, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
+        // Outer glow
+        ctx.save();
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = glowColor;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.07;
+        drawOct(r);
+        ctx.stroke();
+        ctx.restore();
 
-        // Central Neural Hub
-        ctx.fillStyle = baseColor;
-        ctx.beginPath();
-        ctx.arc(0, 0, 0.35, 0, Math.PI * 2);
+        // Filled body
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = this.opacity * 0.2;
+        drawOct(r);
         ctx.fill();
+        ctx.globalAlpha = this.opacity;
+
+        // Inner octagon
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.04;
+        drawOct(r * 0.55);
         ctx.stroke();
 
-        // Glowing Center
-        const nervePulse = 0.6 + Math.sin(Date.now() * 0.005) * 0.4;
-        ctx.fillStyle = `rgba(255, 255, 255, ${nervePulse})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, 0.15, 0, Math.PI * 2);
-        ctx.fill();
+        // 3 internal segments (show it will split into 3)
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.03;
+        ctx.globalAlpha = this.opacity * 0.5;
+        for (let i = 0; i < 3; i++) {
+            const a = (Math.PI * 2 / 3) * i;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = this.opacity;
+
+        // 3 small dots at segment ends (mini preview)
+        ctx.fillStyle = '#FFA500';
+        for (let i = 0; i < 3; i++) {
+            const a = (Math.PI * 2 / 3) * i;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, 0.06, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
 

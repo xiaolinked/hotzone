@@ -61,9 +61,7 @@ export class Hero extends Entity {
         this.color = '#0088FF'; // Blue
     }
 
-    // Push Back
-    private pushBackCooldownTimer: number = 0;
-    private pushBackVisualTimer: number = 0; // For drawing the ring
+
 
     public update(dt: number, game: Game): void {
         const config = ConfigManager.getConfig();
@@ -93,8 +91,7 @@ export class Hero extends Entity {
                 this.ammo = this.maxAmmo;
             }
         }
-        if (this.pushBackCooldownTimer > 0) this.pushBackCooldownTimer -= dt;
-        if (this.pushBackVisualTimer > 0) this.pushBackVisualTimer -= dt;
+
         if (this.damageFlashTimer > 0) this.damageFlashTimer -= dt;
 
         // 2. Dash Logic
@@ -113,12 +110,7 @@ export class Hero extends Entity {
             return;
         }
 
-        // Push Back Input (E or Virtual Button)
-        if ((input.keys['e'] || input.buttons.pushBack) && this.pushBackCooldownTimer <= 0) {
-            this.performPushBack(game);
-            this.pushBackCooldownTimer = config.abilities.push_back.cooldown;
-            this.pushBackVisualTimer = config.abilities.push_back.visual_duration; // Visual ring duration
-        }
+
 
         // Manual Reload (R)
         if (input.keys['r'] && this.reloadTimer <= 0 && this.ammo < this.maxAmmo) {
@@ -164,13 +156,24 @@ export class Hero extends Entity {
                 // Multishot Logic
                 const spread = config.blaster.multishot_spread_radians;
 
+                // Calculate gun tip position in world space
+                // Gun muzzle is at (0.88, -0.11) in hero local space, scaled by 1.6
+                const gunTipLocalX = 0.88 * 1.6;
+                const gunTipLocalY = -0.11 * 1.6;
+                // If aiming left, gun is flipped vertically (scale(1, -1))
+                const flipY = Math.abs(baseAngle) > Math.PI / 2 ? -1 : 1;
+                const cosA = Math.cos(baseAngle);
+                const sinA = Math.sin(baseAngle);
+                const spawnX = this.x + cosA * gunTipLocalX - sinA * (gunTipLocalY * flipY);
+                const spawnY = this.y + sinA * gunTipLocalX + cosA * (gunTipLocalY * flipY);
+
                 for (let i = 0; i < this.multishot; i++) {
                     const offset = (i - (this.multishot - 1) / 2) * spread;
                     const angle = baseAngle + offset;
-                    const targetX = this.x + Math.cos(angle) * config.blaster.multishot_target_distance;
-                    const targetY = this.y + Math.sin(angle) * config.blaster.multishot_target_distance;
+                    const targetX = spawnX + Math.cos(angle) * config.blaster.multishot_target_distance;
+                    const targetY = spawnY + Math.sin(angle) * config.blaster.multishot_target_distance;
 
-                    game.bullets.push(new Bullet(this.x, this.y, targetX, targetY));
+                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY));
                 }
 
                 AudioManager.playShoot();
@@ -234,23 +237,7 @@ export class Hero extends Entity {
         }
     }
 
-    private performPushBack(game: Game) {
-        const config = ConfigManager.getConfig();
-        const radius = config.abilities.push_back.radius;
-        const pushDist = config.abilities.push_back.distance;
 
-        console.log("PUSH BACK!");
-
-        for (const enemy of game.enemies) {
-            if (this.distanceTo(enemy) <= radius) {
-                const dx = enemy.x - this.x;
-                const dy = enemy.y - this.y;
-                const angle = Math.atan2(dy, dx);
-                enemy.x += Math.cos(angle) * pushDist;
-                enemy.y += Math.sin(angle) * pushDist;
-            }
-        }
-    }
 
     private damageFlashTimer: number = 0;
 
@@ -293,7 +280,7 @@ export class Hero extends Entity {
 
     public draw(ctx: CanvasRenderingContext2D): void {
         if (this.isDead) return;
-        const config = ConfigManager.getConfig();
+
 
         // Define colors here so they are available for death animation
         const skinColor = '#FFDAB9';
@@ -393,17 +380,7 @@ export class Hero extends Entity {
         // ctx.shadowBlur = 15;
         // ctx.shadowColor = '#2F80FF';
 
-        // Visual Push Back Effect
-        if (this.pushBackVisualTimer > 0) {
-            const radius = config.abilities.push_back.radius;
-            ctx.beginPath();
-            ctx.arc(0, 0, radius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${this.pushBackVisualTimer * 2})`; // Fade out
-            ctx.fill();
-            ctx.strokeStyle = '#FFF';
-            ctx.lineWidth = 0.05;
-            ctx.stroke();
-        }
+
 
         if (this.isDashing) {
             const angle = Math.atan2(this.dashVector.y, this.dashVector.x);
@@ -479,24 +456,104 @@ export class Hero extends Entity {
             ctx.scale(1, -1);
         }
 
-        // Handle/Grip
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.03;
+
+        // Grip (angled back slightly)
+        ctx.save();
+        ctx.translate(0.18, 0.0);
+        ctx.rotate(0.25); // Slight angle for pistol grip
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.roundRect(-0.08, -0.02, 0.18, 0.38, 0.03);
+        ctx.fill();
+        ctx.stroke();
+        // Grip texture lines
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 0.015;
+        for (let i = 0; i < 5; i++) {
+            const gy = 0.06 + i * 0.06;
+            ctx.beginPath();
+            ctx.moveTo(-0.04, gy);
+            ctx.lineTo(0.06, gy);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.03;
+
+        // Slide / Upper receiver (main body)
+        ctx.fillStyle = '#3a3a3a';
+        ctx.beginPath();
+        ctx.moveTo(0.08, -0.22);
+        ctx.lineTo(0.82, -0.22);
+        ctx.lineTo(0.88, -0.18); // Tapered muzzle
+        ctx.lineTo(0.88, -0.04);
+        ctx.lineTo(0.08, -0.04);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Lower frame / receiver
+        ctx.fillStyle = '#2a2a2a';
+        ctx.beginPath();
+        ctx.moveTo(0.08, -0.04);
+        ctx.lineTo(0.55, -0.04);
+        ctx.lineTo(0.55, 0.06);
+        ctx.lineTo(0.08, 0.06);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Trigger guard
+        ctx.fillStyle = 'transparent';
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 0.03;
+        ctx.beginPath();
+        ctx.moveTo(0.25, 0.06);
+        ctx.lineTo(0.25, 0.16);
+        ctx.quadraticCurveTo(0.32, 0.22, 0.42, 0.16);
+        ctx.lineTo(0.42, 0.06);
+        ctx.stroke();
+
+        // Trigger
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 0.025;
+        ctx.beginPath();
+        ctx.moveTo(0.33, 0.06);
+        ctx.lineTo(0.31, 0.14);
+        ctx.stroke();
+
+        // Ejection port
         ctx.fillStyle = '#222';
-        ctx.fillRect(0.1, -0.1, 0.2, 0.35);
-        ctx.strokeRect(0.1, -0.1, 0.2, 0.35);
+        ctx.fillRect(0.4, -0.20, 0.12, 0.08);
 
-        // Slide / Barrel
-        ctx.fillStyle = '#444';
-        ctx.fillRect(0.1, -0.18, 0.75, 0.25); // Main Body (Smaller gun)
-        ctx.strokeRect(0.1, -0.18, 0.75, 0.25);
+        // Serrations on slide (rear)
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 0.015;
+        for (let i = 0; i < 4; i++) {
+            const sx = 0.12 + i * 0.04;
+            ctx.beginPath();
+            ctx.moveTo(sx, -0.21);
+            ctx.lineTo(sx, -0.05);
+            ctx.stroke();
+        }
 
-        // Barrel End / Muzzle
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0.75, -0.1, 0.12, 0.12);
+        // Front sight
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0.78, -0.26, 0.03, 0.04);
 
-        // Top Detail (Iron Sights)
-        ctx.fillStyle = '#333';
-        ctx.fillRect(0.2, -0.22, 0.08, 0.04);
-        ctx.fillRect(0.65, -0.22, 0.08, 0.04);
+        // Rear sight
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0.14, -0.26, 0.03, 0.04);
+        ctx.fillRect(0.22, -0.26, 0.03, 0.04);
+
+        // Muzzle hole
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(0.88, -0.11, 0.035, 0, Math.PI * 2);
+        ctx.fill();
 
         ctx.restore();
 

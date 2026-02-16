@@ -3,6 +3,8 @@ import { Game } from "../game";
 import { Entity } from "./Entity";
 import { Enemy } from "./Enemy";
 import { AudioManager } from "../audio/AudioManager";
+import { TankEnemy } from "./TankEnemy";
+import { MiniEnemy } from "./MiniEnemy";
 
 export enum BombState {
     IDLE,       // Passive on enemy back
@@ -173,8 +175,14 @@ export class Bomb extends Entity {
                 const pct = 1.0 - (dist / this.radiusExplosion);
 
                 if (enemy.bomb && enemy.bomb.state !== BombState.EXPLODING && enemy.bomb.state !== BombState.DEAD) {
-                    enemy.bomb.timer = Math.min(enemy.bomb.timer, 0.02);
-                    enemy.bomb.arm();
+                    if (enemy instanceof TankEnemy) {
+                        // Juggernaut: activate bomb at 50% countdown
+                        enemy.bomb.arm();
+                        enemy.bomb.timer = Math.min(enemy.bomb.timer, config.bomb.countdown_duration * 0.5);
+                    } else {
+                        // All other enemies: instant chain explosion
+                        enemy.bomb.explode(game);
+                    }
                 }
 
                 if (enemy.shield > 0) {
@@ -182,7 +190,7 @@ export class Bomb extends Entity {
                 } else {
                     const actualDamage = Math.max(0, this.damage * pct);
                     enemy.takeDamage(actualDamage);
-                    if (enemy.hp <= 0) currentChainKills++;
+                    if (enemy.hp <= 0 && !(enemy instanceof MiniEnemy)) currentChainKills++;
                 }
             }
         }

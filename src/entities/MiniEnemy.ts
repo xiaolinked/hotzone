@@ -24,45 +24,50 @@ export class MiniEnemy extends Enemy {
         ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.x, this.y);
-        ctx.scale(1.1, 1.1);
+
+        // --- SPIDER-BOT: Neon glowing small CIRCLE ---
+        const mainColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#FFA500');
+        const glowColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#FFA500');
+        const r = this.radius;
+
+        // Rotate to face direction
         ctx.rotate(this.angle);
 
-        // --- DRAW SPIDER BOT ---
-        const baseColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#444');
-        const eyeColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#E1F5FE' : '#FF0000');
+        // Outer glow
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = glowColor;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.04;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
 
-        ctx.strokeStyle = '#000';
+        // Filled body
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = this.opacity * 0.3;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = this.opacity;
+
+        // Spiky legs (4 short lines)
+        ctx.strokeStyle = mainColor;
         ctx.lineWidth = 0.02;
-
-        const skitter = (Math.sin(Date.now() * 0.05) + 1) * 0.5;
-
-        // Spider Legs (8 legs)
-        ctx.fillStyle = '#111';
-        for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI / 4) * i;
-            const legExtend = 0.3 + (i % 2 === 0 ? skitter * 0.1 : (1 - skitter) * 0.1);
-
-            ctx.save();
-            ctx.rotate(angle);
+        const legAnim = Math.sin(Date.now() * 0.03) * 0.1;
+        for (let i = 0; i < 4; i++) {
+            const a = (Math.PI / 2) * i + Math.PI / 4;
             ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(legExtend, 0.1);
-            ctx.lineTo(legExtend + 0.1, 0.3);
+            ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+            ctx.lineTo(Math.cos(a) * (r + 0.2 + legAnim), Math.sin(a) * (r + 0.2 + legAnim));
             ctx.stroke();
-            ctx.restore();
         }
 
-        // Central Core
-        ctx.fillStyle = baseColor;
+        // Eye dot
+        ctx.fillStyle = this.damageFlash > 0 ? '#FFF' : '#FF0000';
         ctx.beginPath();
-        ctx.arc(0, 0, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        // Glowing Red Eye
-        ctx.fillStyle = eyeColor;
-        ctx.beginPath();
-        ctx.arc(0.08, 0, 0.05, 0, Math.PI * 2);
+        ctx.arc(r * 0.3, 0, 0.04, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();

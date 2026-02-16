@@ -54,16 +54,15 @@ export class BlinkerEnemy extends Enemy {
         ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.x, this.y);
-        ctx.scale(1.1, 1.1);
 
-        // Glitch effect before blink
-        if (this.blinkTimer < 0.2) {
-            ctx.translate((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2);
+        // Glitch offset before blink
+        if (this.blinkTimer < 0.3) {
+            const glitchIntensity = (0.3 - this.blinkTimer) * 2;
+            ctx.translate(
+                (Math.random() - 0.5) * 0.3 * glitchIntensity,
+                (Math.random() - 0.5) * 0.3 * glitchIntensity
+            );
         }
-
-        // Bloom
-        // ctx.shadowBlur = 10;
-        // ctx.shadowColor = this.color;
 
         // Shield
         if (this.shield > 0) {
@@ -77,49 +76,59 @@ export class BlinkerEnemy extends Enemy {
             ctx.restore();
         }
 
-        const isFacingLeft = Math.abs(this.angle) > Math.PI / 2;
-        if (isFacingLeft) {
-            ctx.scale(-1, 1);
+        // Slow spin
+        const spin = Date.now() * 0.001;
+        ctx.rotate(spin);
+
+        // --- PHANTOM: Neon glowing SQUARE ---
+        const mainColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#A020F0');
+        const glowColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#A020F0');
+        const r = this.radius;
+
+        // Flickering opacity when about to blink
+        if (this.blinkTimer < 0.5) {
+            ctx.globalAlpha = this.opacity * (0.3 + Math.sin(Date.now() * 0.05) * 0.3);
         }
 
-        // --- DRAW REALISTIC BLINKER DRONE ---
-        const baseColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#A020F0');
-        const crystalColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#E0B0FF');
+        // Outer glow
+        ctx.save();
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = glowColor;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.06;
+        ctx.strokeRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
+        ctx.restore();
 
-        ctx.strokeStyle = this.damageFlash > 0 ? '#FFFFFF' : '#222';
-        ctx.lineWidth = 0.05;
+        // Filled body
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = (this.blinkTimer < 0.5 ? 0.15 : 0.25) * this.opacity;
+        ctx.fillRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
+        ctx.globalAlpha = this.opacity;
 
-        // Phase-shifting Crystal Core
-        ctx.fillStyle = crystalColor;
-        const crystalSize = 0.4 + Math.sin(Date.now() * 0.02) * 0.1;
+        // Inner diamond
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.04;
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
-            const px = Math.cos(angle) * crystalSize;
-            const py = Math.sin(angle) * crystalSize;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-        }
+        ctx.moveTo(0, -r * 0.45);
+        ctx.lineTo(r * 0.45, 0);
+        ctx.lineTo(0, r * 0.45);
+        ctx.lineTo(-r * 0.45, 0);
         ctx.closePath();
-        ctx.fill();
         ctx.stroke();
 
-        // Fragmented Armor Plates (Floating)
-        ctx.fillStyle = baseColor;
-        for (let i = 0; i < 4; i++) {
-            const angle = (Math.PI / 2) * i + (Date.now() * 0.002);
-            ctx.save();
-            ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.roundRect(0.4, -0.2, 0.3, 0.4, 0.05);
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        // Stealth Sensor (Slit Eye)
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0.1, -0.05, 0.3, 0.1);
+        // Center cross
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.02;
+        ctx.globalAlpha = this.opacity * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 0.4);
+        ctx.lineTo(0, r * 0.4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.4, 0);
+        ctx.lineTo(r * 0.4, 0);
+        ctx.stroke();
+        ctx.globalAlpha = this.opacity;
 
         ctx.restore();
 

@@ -21,85 +21,86 @@ export class TankEnemy extends Enemy {
         ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.x, this.y);
-        ctx.scale(1.1, 1.1);
-
-        // Bloom
-        // ctx.shadowBlur = 10;
-        // ctx.shadowColor = this.color;
 
         // Shield
         if (this.shield > 0) {
             ctx.save();
             ctx.strokeStyle = '#4DFFF3';
             ctx.globalAlpha = 0.7 * this.opacity;
-            ctx.lineWidth = 0.08; // Thicker shield
+            ctx.lineWidth = 0.1;
             ctx.beginPath();
-            ctx.arc(0, 0, this.shieldRadius, 0, Math.PI * 2); // Big shield
+            ctx.arc(0, 0, this.shieldRadius, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
 
-        const isFacingLeft = Math.abs(this.angle) > Math.PI / 2;
-        if (isFacingLeft) {
-            ctx.scale(-1, 1);
+        // Slow rotation for menacing feel
+        const slowSpin = Date.now() * 0.0005;
+        ctx.rotate(slowSpin);
+
+        // --- JUGGERNAUT: Neon glowing HEXAGON ---
+        const mainColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#2ECC71');
+        const glowColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#2ECC71');
+        const r = this.radius;
+
+        // Draw hexagon helper
+        const drawHex = (size: number) => {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i - Math.PI / 6;
+                const px = Math.cos(a) * size;
+                const py = Math.sin(a) * size;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+        };
+
+        // Outer glow
+        ctx.save();
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = glowColor;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.1;
+        drawHex(r);
+        ctx.stroke();
+        ctx.restore();
+
+        // Filled body
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = this.opacity * 0.2;
+        drawHex(r);
+        ctx.fill();
+        ctx.globalAlpha = this.opacity;
+
+        // Inner hexagon ring
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.05;
+        drawHex(r * 0.6);
+        ctx.stroke();
+
+        // Center dot (pulsing)
+        const pulse = 0.5 + Math.sin(Date.now() * 0.008) * 0.5;
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = this.opacity * pulse;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = this.opacity;
+
+        // Cross lines connecting hex vertices (armor feel)
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 0.03;
+        ctx.globalAlpha = this.opacity * 0.4;
+        for (let i = 0; i < 3; i++) {
+            const a1 = (Math.PI / 3) * i - Math.PI / 6;
+            const a2 = a1 + Math.PI;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a1) * r * 0.6, Math.sin(a1) * r * 0.6);
+            ctx.lineTo(Math.cos(a2) * r * 0.6, Math.sin(a2) * r * 0.6);
+            ctx.stroke();
         }
-
-        // Apply a subtle heavy stomp tilt
-        const stompLean = Math.sin(Date.now() * 0.005) * 0.03;
-        ctx.rotate(stompLean);
-
-        // --- DRAW HEAVY JUGGERNAUT ---
-        const baseColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#AED6F1' : '#2F4F4F');
-        const plateColor = this.damageFlash > 0 ? '#FFFFFF' : (this.freezeTimer > 0 ? '#5DADE2' : '#1A3333');
-
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 0.08;
-
-        const stompCycle = Math.sin(Date.now() * 0.005) * 0.2;
-
-        // Heavy Legs
-        ctx.fillStyle = '#111';
-        // Left
-        ctx.save();
-        ctx.translate(-0.35, 0.2);
-        ctx.rotate(-stompCycle);
-        ctx.fillRect(-0.25, 0, 0.5, 0.8);
-        ctx.strokeRect(-0.25, 0, 0.5, 0.8);
-        ctx.restore();
-        // Right
-        ctx.save();
-        ctx.translate(0.35, 0.2);
-        ctx.rotate(stompCycle);
-        ctx.fillRect(-0.25, 0, 0.5, 0.8);
-        ctx.strokeRect(-0.25, 0, 0.5, 0.8);
-        ctx.restore();
-
-        // Massive Torso
-        ctx.fillStyle = baseColor;
-        ctx.beginPath();
-        ctx.roundRect(-0.7, -0.6, 1.4, 1.2, 0.3);
-        ctx.fill();
-        ctx.stroke();
-
-        // Chest Plate
-        ctx.fillStyle = plateColor;
-        ctx.beginPath();
-        ctx.roundRect(-0.5, -0.4, 1.0, 0.6, 0.1);
-        ctx.fill();
-        ctx.stroke();
-
-        // Heavy Helmet
-        ctx.fillStyle = baseColor;
-        ctx.beginPath();
-        ctx.roundRect(-0.35, -1.0, 0.7, 0.5, 0.2);
-        ctx.fill();
-        ctx.stroke();
-
-        // Glowing Visor
-        ctx.fillStyle = '#FF0000';
-        ctx.beginPath();
-        ctx.roundRect(-0.2, -0.85, 0.5, 0.15, 0.05);
-        ctx.fill();
+        ctx.globalAlpha = this.opacity;
 
         ctx.restore();
 

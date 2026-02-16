@@ -14,7 +14,7 @@ export class InputManager {
     public stickRight: { x: number, y: number, active: boolean, id: number | null, originX: number, originY: number } = { x: 0, y: 0, active: false, id: null, originX: 0, originY: 0 };
 
     // Virtual Buttons
-    public buttons: { [key: string]: boolean } = { dash: false, pushBack: false };
+    public buttons: { [key: string]: boolean } = { dash: false };
 
     public isJoystickDisabled: boolean = false;
 
@@ -85,12 +85,7 @@ export class InputManager {
             return;
         }
 
-        // Check Push Back
-        if (Math.hypot(x - (width - 180), y - (height - 80)) < 50) {
-            this.buttons.pushBack = true;
-            this.clickOccurred = true;
-            return;
-        }
+
 
         // Left Half for Movement Stick
         if (x < width / 2 && !this.isJoystickDisabled) {
@@ -175,7 +170,7 @@ export class InputManager {
         // Release buttons - we can check ID if we want to be more precise, 
         // but typically touch buttons are tap-based or release-on-end.
         this.buttons.dash = false;
-        this.buttons.pushBack = false;
+
     }
 
     public isNewClick(): boolean {

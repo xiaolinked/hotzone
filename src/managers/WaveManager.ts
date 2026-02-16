@@ -157,6 +157,7 @@ export class WaveManager {
         this.activeTelegraphs = [];
 
         this.game.generateUpgradeOptions();
+        this.game.rerollCost = ConfigManager.getConfig().shop.reroll_base_cost;
     }
 
     private handleSpawning(dt: number) {
@@ -175,9 +176,14 @@ export class WaveManager {
             const progress = (this.currentWave - 1) / 4; // 0 to 1
             maxOnScreen = Math.floor(5 + progress * 7);
             spawnDelay = 2.5 - (progress * 1.8);
+        } else if (this.currentWave <= 10) {
+            // Waves 6-10: Gradual ramp (transition zone)
+            const progress = (this.currentWave - 5) / 5; // 0 to 1
+            maxOnScreen = Math.floor(13 + progress * 9);  // 13 -> 22
+            spawnDelay = 1.2 - (progress * 0.6);           // 1.2s -> 0.6s
         } else {
-            // Wave 6+: Progressive increase in density (Capped at 60 for performance)
-            maxOnScreen = Math.min(60, 12 + (this.currentWave - 5) * 3);
+            // Wave 11+: Full chaos (capped at 60 for performance)
+            maxOnScreen = Math.min(60, 22 + (this.currentWave - 10) * 3);
             spawnDelay = config.enemy.spawn.spawn_delay;
         }
 
@@ -261,9 +267,28 @@ export class WaveManager {
             } else {
                 enemy = new Enemy(x, y);
             }
+        } else if (this.currentWave <= 7) {
+            // Waves 6-7: Introduce Blinkers (no Tank/Splitter yet)
+            if (rand < 0.25) {
+                enemy = new FastEnemy(x, y);
+            } else if (rand < 0.40) {
+                enemy = new BlinkerEnemy(x, y);
+            } else {
+                enemy = new Enemy(x, y);
+            }
+        } else if (this.currentWave <= 9) {
+            // Waves 8-9: Add Splitter, still no Tank
+            if (rand < 0.20) {
+                enemy = new FastEnemy(x, y);
+            } else if (rand < 0.35) {
+                enemy = new BlinkerEnemy(x, y);
+            } else if (rand < 0.45) {
+                enemy = new SplitterEnemy(x, y);
+            } else {
+                enemy = new Enemy(x, y);
+            }
         } else {
-            // Mid/Late Game (Waves 6+): Full Chaos
-            // 10% Tank, 15% Fast, 15% Blinker, 10% Splitter, 50% Normal
+            // Wave 10+: Full Chaos with Tanks
             if (rand < 0.1) {
                 enemy = new TankEnemy(x, y);
             } else if (rand < 0.25) {

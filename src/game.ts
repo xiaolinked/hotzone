@@ -33,6 +33,8 @@ export class Game {
     public coinCount: number = 0;
     public combos: { x: number, y: number, text: string, timer: number }[] = [];
     public currentShopOptions: UpgradeOption[] = [];
+    public rerollCost: number = 0;
+    private previousShopTypes: string[] = [];
 
     private shopCooldown: number = 0;
     public hitStopTimer: number = 0;
@@ -172,6 +174,8 @@ export class Game {
         this.isRickRolled = false;
         this.deathPauseTimer = 0;
         this.deathHighlightTimer = 0;
+        this.rerollCost = 0;
+        this.previousShopTypes = [];
         this.generateUpgradeOptions();
         console.log("Game Restarted");
     }
@@ -383,6 +387,22 @@ export class Game {
                         input.keys['enter'] = false;
                         return;
                     }
+
+                    // Reroll button hit detection
+                    let cardWidth = config.ui.shop.card_width;
+                    let cardHeight = config.ui.shop.card_height;
+                    if (input.isTouchDevice) {
+                        const availableWidth = Math.min(window.innerWidth - 20, 600);
+                        cardWidth = Math.floor((availableWidth - 40) / 3);
+                        if (cardWidth > 160) cardWidth = 160;
+                        cardHeight = cardWidth * 1.4;
+                    }
+                    const rerollBtnY = config.ui.shop.card_start_y + cardHeight + 30;
+                    const inRerollBtn = Math.abs(mx - cx) < 100 && Math.abs(my - rerollBtnY) < 22;
+                    if (inRerollBtn && this.coinCount >= this.rerollCost) {
+                        this.rerollShop();
+                        return;
+                    }
                 }
             }
 
@@ -393,6 +413,12 @@ export class Game {
                     if (opt && input.keys[(i + 1).toString()]) {
                         this.buyUpgrade(i);
                     }
+                }
+
+                // Keyboard shortcut for reroll
+                if (input.keys['r'] && this.coinCount >= this.rerollCost) {
+                    input.keys['r'] = false;
+                    this.rerollShop();
                 }
 
                 if (clickHappened) {
@@ -465,7 +491,10 @@ export class Game {
             if (enemy.isDead) {
                 enemy.onDeath(this);
                 this.enemies.splice(i, 1);
-                const coinsDropped = config.economy.coins_drop_base + Math.floor(Math.random() * (config.economy.coins_drop_random_variance + 1));
+
+                // Minis drop fewer coins (just 1)
+                const isMini = enemy.constructor.name === 'MiniEnemy';
+                const coinsDropped = isMini ? 1 : config.economy.coins_drop_base + Math.floor(Math.random() * (config.economy.coins_drop_random_variance + 1));
                 for (let j = 0; j < coinsDropped; j++) {
                     const cx = enemy.x + (Math.random() - 0.5) * config.economy.coin.drop_spread;
                     const cy = enemy.y + (Math.random() - 0.5) * config.economy.coin.drop_spread;
@@ -521,6 +550,15 @@ export class Game {
 
     }
 
+    public rerollShop() {
+        const config = ConfigManager.getConfig();
+        this.coinCount -= this.rerollCost;
+        this.rerollCost += config.shop.reroll_cost_increase;
+        this.shopCooldown = config.ui.shop.cooldown_after_buy;
+        AudioManager.playBuy();
+        this.generateUpgradeOptions();
+    }
+
     public generateUpgradeOptions() {
         const config = ConfigManager.getConfig();
         const pool: UpgradeOption[] = config.shop.upgrades as UpgradeOption[];
@@ -531,7 +569,17 @@ export class Game {
             filteredPool = pool.filter(opt => opt.type !== 'multishot');
         }
 
-        const shuffled = [...filteredPool].sort(() => 0.5 - Math.random());
+        // Avoid showing the same set of types back-to-back
+        let availablePool = filteredPool;
+        if (this.previousShopTypes.length > 0) {
+            const nonRepeat = filteredPool.filter(opt => !this.previousShopTypes.includes(opt.type));
+            // Only use the filtered pool if we have enough options
+            if (nonRepeat.length >= config.shop.options_per_wave) {
+                availablePool = nonRepeat;
+            }
+        }
+
+        const shuffled = [...availablePool].sort(() => 0.5 - Math.random());
 
         // Scale price based on wave: starts at 50% for wave 1, increases by 30% each wave
         const priceFactor = 0.2 + (this.waveManager.currentWave * 0.3);
@@ -540,6 +588,16 @@ export class Game {
             ...opt,
             cost: Math.floor(opt.cost * priceFactor)
         }));
+
+        // Save current types for next reroll's duplicate prevention
+        this.previousShopTypes = this.currentShopOptions.map(opt => opt.type);
+
+        // One item is always cheap: base 15-18 coins, +3 per wave
+        if (this.currentShopOptions.length > 0) {
+            const cheapIdx = Math.floor(Math.random() * this.currentShopOptions.length);
+            const baseCheap = 15 + Math.floor(Math.random() * 4); // 15-18
+            this.currentShopOptions[cheapIdx].cost = baseCheap + (this.waveManager.currentWave - 1) * 3;
+        }
     }
 
     public getEntities() {
