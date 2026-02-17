@@ -171,7 +171,7 @@
         }
     },
     "shop": {
-        "options_per_wave": 3,
+        "options_per_wave": 6,
         "reroll_base_cost": 10,
         "reroll_cost_increase": 5,
         "upgrades": [
@@ -215,13 +215,40 @@
                 "type": "regen",
                 "name": "Bio-Adapt",
                 "description": "+1.5 HP/sec Regen\n(+1.5 HP/sec more)",
-                "cost": 65
+                "cost": 25
             },
             {
                 "type": "armor",
                 "name": "Armor Plate",
                 "description": "+5% Damage Reduction",
                 "cost": 45
+            },
+            {
+                "type": "crit",
+                "name": "Dead Eye",
+                "description": "+2% Crit Chance (x3 DMG)",
+                "cost": 50
+            },
+            {
+                "type": "weapon",
+                "weaponId": "smg",
+                "name": "SMG",
+                "description": "Fast fire, 25 rounds",
+                "cost": 75
+            },
+            {
+                "type": "weapon",
+                "weaponId": "shotgun",
+                "name": "Shotgun",
+                "description": "5 pellets, high DMG",
+                "cost": 100
+            },
+            {
+                "type": "weapon",
+                "weaponId": "rifle",
+                "name": "Rifle",
+                "description": "High DMG, long range",
+                "cost": 150
             }
         ]
     },

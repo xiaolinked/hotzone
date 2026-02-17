@@ -33,6 +33,40 @@ export class Hero extends Entity {
     public reloadTimer: number = 0;
     public multishot: number = 1;
     public hpRegen: number = 0;
+    public critChance: number = 0.05;
+
+    // Weapon system
+    public currentWeapon: string = 'pistol';
+    public ownedWeapons: string[] = ['pistol'];
+    public weaponDamage: number = 10;
+    public weaponFireRate: number = 0.42;
+    public weaponRange: number = 25;
+    public weaponMagSize: number = 10;
+    public weaponReloadTime: number = 1.2;
+    public weaponSpread: number = 0;
+    public weaponMultishot: number = 1;
+    public weaponBulletSpeed: number = 18;
+
+    public equipWeapon(wId: string, ws: any): void {
+        this.currentWeapon = wId;
+        this.weaponDamage = ws.damage;
+        this.weaponFireRate = ws.fireRate;
+        this.weaponRange = ws.range;
+        this.weaponMagSize = ws.magSize;
+        this.weaponReloadTime = ws.reloadTime;
+        this.weaponSpread = ws.spread;
+        this.weaponMultishot = ws.multishot;
+        this.weaponBulletSpeed = ws.bulletSpeed;
+
+        // Update ammo to new mag size
+        this.maxAmmo = ws.magSize;
+        this.ammo = ws.magSize;
+        this.reloadTimer = 0;
+
+        if (!this.ownedWeapons.includes(wId)) {
+            this.ownedWeapons.push(wId);
+        }
+    }
 
     // Dash
     private isDashing: boolean = false;
@@ -143,7 +177,7 @@ export class Hero extends Entity {
         if (isShooting && this.fireTimer <= 0 && this.reloadTimer <= 0) {
             if (this.ammo > 0) {
                 this.ammo--;
-                this.fireTimer = config.blaster.fire_rate;
+                this.fireTimer = this.weaponFireRate;
 
                 // Aim Logic
                 let baseAngle = 0;
@@ -153,33 +187,32 @@ export class Hero extends Entity {
                     baseAngle = Math.atan2(aimY - this.y, aimX - this.x);
                 }
 
-                // Multishot Logic
-                const spread = config.blaster.multishot_spread_radians;
+                // Multishot: weapon base + upgrade bonus
+                const totalMultishot = this.weaponMultishot + (this.multishot - 1);
+                const spread = this.weaponSpread > 0 ? this.weaponSpread : config.blaster.multishot_spread_radians;
 
                 // Calculate gun tip position in world space
-                // Gun muzzle is at (0.88, -0.11) in hero local space, scaled by 1.6
                 const gunTipLocalX = 0.88 * 1.6;
                 const gunTipLocalY = -0.11 * 1.6;
-                // If aiming left, gun is flipped vertically (scale(1, -1))
                 const flipY = Math.abs(baseAngle) > Math.PI / 2 ? -1 : 1;
                 const cosA = Math.cos(baseAngle);
                 const sinA = Math.sin(baseAngle);
                 const spawnX = this.x + cosA * gunTipLocalX - sinA * (gunTipLocalY * flipY);
                 const spawnY = this.y + sinA * gunTipLocalX + cosA * (gunTipLocalY * flipY);
 
-                for (let i = 0; i < this.multishot; i++) {
-                    const offset = (i - (this.multishot - 1) / 2) * spread;
+                for (let i = 0; i < totalMultishot; i++) {
+                    const offset = (i - (totalMultishot - 1) / 2) * spread;
                     const angle = baseAngle + offset;
                     const targetX = spawnX + Math.cos(angle) * config.blaster.multishot_target_distance;
                     const targetY = spawnY + Math.sin(angle) * config.blaster.multishot_target_distance;
 
-                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY));
+                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY, this.critChance, this.currentWeapon, this.weaponDamage, this.weaponBulletSpeed, this.weaponRange));
                 }
 
                 AudioManager.playShoot();
 
                 if (this.ammo <= 0) {
-                    this.reloadTimer = config.blaster.reload_time;
+                    this.reloadTimer = this.weaponReloadTime;
                     AudioManager.playReload();
                 }
             }
@@ -376,57 +409,160 @@ export class Hero extends Entity {
         ctx.translate(this.x, this.y);
         ctx.scale(1.6, 1.6); // Hero is now BIGGER
 
-        // Bloom Effect removed for performance
-        // ctx.shadowBlur = 15;
-        // ctx.shadowColor = '#2F80FF';
-
-
-
         if (this.isDashing) {
             const angle = Math.atan2(this.dashVector.y, this.dashVector.x);
-            // Stretch along the dash direction while keeping character upright
             ctx.rotate(angle);
             ctx.scale(1.2, 0.85);
             ctx.rotate(-angle);
         }
 
+        // --- SUBTLE BODY GLOW ---
+        ctx.fillStyle = 'rgba(47, 128, 255, 0.08)';
+        ctx.beginPath();
+        ctx.arc(0, -0.1, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+
         // --- DRAW HUMAN FIGURE ---
-        ctx.lineWidth = 0.05;
+        ctx.lineWidth = 0.04;
         ctx.strokeStyle = outlineColor;
 
         // Legs (Walking Animation)
         const legSwing = Math.sin(this.walkTimer) * 0.4;
 
-        ctx.fillStyle = '#1A365D'; // Pants color
         // Left Leg
         ctx.save();
         ctx.translate(-0.18, 0.2);
         ctx.rotate(this.isWalking ? -legSwing : 0);
-        ctx.fillRect(-0.12, 0, 0.24, 0.5);
-        ctx.strokeRect(-0.12, 0, 0.24, 0.5);
+        // Pants with gradient
+        const pantsGradL = ctx.createLinearGradient(-0.12, 0, 0.12, 0);
+        pantsGradL.addColorStop(0, '#0F2847');
+        pantsGradL.addColorStop(0.5, '#1A365D');
+        pantsGradL.addColorStop(1, '#0F2847');
+        ctx.fillStyle = pantsGradL;
+        ctx.beginPath();
+        ctx.roundRect(-0.12, 0, 0.24, 0.4, 0.03);
+        ctx.fill();
+        ctx.stroke();
+        // Boot
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.roundRect(-0.13, 0.38, 0.26, 0.14, [0, 0, 0.04, 0.04]);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.stroke();
+        ctx.strokeStyle = outlineColor;
         ctx.restore();
 
         // Right Leg
         ctx.save();
         ctx.translate(0.18, 0.2);
         ctx.rotate(this.isWalking ? legSwing : 0);
-        ctx.fillRect(-0.12, 0, 0.24, 0.5);
-        ctx.strokeRect(-0.12, 0, 0.24, 0.5);
+        const pantsGradR = ctx.createLinearGradient(-0.12, 0, 0.12, 0);
+        pantsGradR.addColorStop(0, '#0F2847');
+        pantsGradR.addColorStop(0.5, '#1A365D');
+        pantsGradR.addColorStop(1, '#0F2847');
+        ctx.fillStyle = pantsGradR;
+        ctx.beginPath();
+        ctx.roundRect(-0.12, 0, 0.24, 0.4, 0.03);
+        ctx.fill();
+        ctx.stroke();
+        // Boot
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.roundRect(-0.13, 0.38, 0.26, 0.14, [0, 0, 0.04, 0.04]);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.stroke();
+        ctx.strokeStyle = outlineColor;
         ctx.restore();
 
-        // Torso
-        ctx.fillStyle = clothesColor;
+        // Torso (tactical vest with gradient)
+        const vestGrad = ctx.createLinearGradient(-0.35, -0.4, 0.35, 0.35);
+        vestGrad.addColorStop(0, '#4A9EFF');
+        vestGrad.addColorStop(0.4, clothesColor);
+        vestGrad.addColorStop(1, '#1A5ABF');
+        ctx.fillStyle = vestGrad;
         ctx.beginPath();
         ctx.roundRect(-0.35, -0.4, 0.7, 0.75, 0.1);
         ctx.fill();
         ctx.stroke();
 
+        // Vest chest highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.roundRect(-0.28, -0.35, 0.56, 0.25, 0.06);
+        ctx.fill();
+
+        // Vest pocket detail (left)
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 0.02;
+        ctx.beginPath();
+        ctx.roundRect(-0.25, -0.05, 0.2, 0.18, 0.03);
+        ctx.stroke();
+
+        // Vest pocket detail (right)
+        ctx.beginPath();
+        ctx.roundRect(0.05, -0.05, 0.2, 0.18, 0.03);
+        ctx.stroke();
+
+        // Belt
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-0.34, 0.2, 0.68, 0.08);
+        ctx.fillStyle = '#C0A040';
+        ctx.fillRect(-0.04, 0.21, 0.08, 0.06); // Belt buckle
+
+        ctx.strokeStyle = outlineColor;
+        ctx.lineWidth = 0.04;
+
+        // Arms (skin colored, slightly behind torso)
+        const armSwing = this.isWalking ? Math.sin(this.walkTimer) * 0.2 : 0;
+
+        // Left Arm
+        ctx.save();
+        ctx.translate(-0.38, -0.25);
+        ctx.rotate(armSwing);
+        const armGradL = ctx.createLinearGradient(-0.09, 0, 0.09, 0);
+        armGradL.addColorStop(0, '#E8C4A0');
+        armGradL.addColorStop(0.5, skinColor);
+        armGradL.addColorStop(1, '#E8C4A0');
+        ctx.fillStyle = armGradL;
+        ctx.beginPath();
+        ctx.roundRect(-0.09, 0, 0.18, 0.5, 0.05);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Right Arm
+        ctx.save();
+        ctx.translate(0.38, -0.25);
+        ctx.rotate(-armSwing);
+        const armGradR = ctx.createLinearGradient(-0.09, 0, 0.09, 0);
+        armGradR.addColorStop(0, '#E8C4A0');
+        armGradR.addColorStop(0.5, skinColor);
+        armGradR.addColorStop(1, '#E8C4A0');
+        ctx.fillStyle = armGradR;
+        ctx.beginPath();
+        ctx.roundRect(-0.09, 0, 0.18, 0.5, 0.05);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
         // Head
-        ctx.fillStyle = skinColor;
+        const headGrad = ctx.createRadialGradient(0, -0.6, 0, 0, -0.6, 0.28);
+        headGrad.addColorStop(0, '#FFE4CC');
+        headGrad.addColorStop(0.7, skinColor);
+        headGrad.addColorStop(1, '#E8B898');
+        ctx.fillStyle = headGrad;
         ctx.beginPath();
         ctx.arc(0, -0.6, 0.28, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+
+        // Hair (top of head)
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(0, -0.68, 0.26, Math.PI, 0);
+        ctx.fill();
 
         // Eyes (facing aim direction)
         const input = InputManager.getInstance();
@@ -438,125 +574,204 @@ export class Hero extends Entity {
         }
 
         ctx.save();
-        ctx.translate(0, -0.6);
+        ctx.translate(0, -0.55);
         ctx.rotate(aimAngle);
+        // Eye whites
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.ellipse(0.1, -0.07, 0.055, 0.04, 0, 0, Math.PI * 2);
+        ctx.ellipse(0.1, 0.07, 0.055, 0.04, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Pupils
         ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.arc(0.12, -0.08, 0.04, 0, Math.PI * 2);
-        ctx.arc(0.12, 0.08, 0.04, 0, Math.PI * 2);
+        ctx.arc(0.13, -0.07, 0.03, 0, Math.PI * 2);
+        ctx.arc(0.13, 0.07, 0.03, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // --- DRAW REALISTIC GUN ---
+        // --- RENDER WEAPON ---
+        this.drawWeapon(ctx, aimAngle);
+
+        ctx.restore(); // End Main Transform (this.x, this.y)
+    }
+
+    private drawWeapon(ctx: CanvasRenderingContext2D, aimAngle: number): void {
         ctx.save();
         ctx.rotate(aimAngle);
 
         // Flip gun vertically if aiming left so it's not upside down
-        if (Math.abs(aimAngle) > Math.PI / 2) {
+        const flipY = Math.abs(aimAngle) > Math.PI / 2 ? -1 : 1;
+        if (flipY === -1) {
             ctx.scale(1, -1);
         }
 
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 0.03;
 
-        // Grip (angled back slightly)
-        ctx.save();
-        ctx.translate(0.18, 0.0);
-        ctx.rotate(0.25); // Slight angle for pistol grip
-        ctx.fillStyle = '#1a1a1a';
-        ctx.beginPath();
-        ctx.roundRect(-0.08, -0.02, 0.18, 0.38, 0.03);
-        ctx.fill();
-        ctx.stroke();
-        // Grip texture lines
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 0.015;
-        for (let i = 0; i < 5; i++) {
-            const gy = 0.06 + i * 0.06;
-            ctx.beginPath();
-            ctx.moveTo(-0.04, gy);
-            ctx.lineTo(0.06, gy);
-            ctx.stroke();
+        switch (this.currentWeapon) {
+            case 'smg':
+                // --- SMG MODEL (Tactical PDW Style) ---
+                // Upper Receiver
+                ctx.fillStyle = '#2a2a2a';
+                ctx.beginPath();
+                ctx.roundRect(0.1, -0.2, 0.55, 0.24, 0.04);
+                ctx.fill(); ctx.stroke();
+
+                // Rail/Top detail
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0.15, -0.24, 0.45, 0.06);
+
+                // Curved Vertical Magazine
+                ctx.fillStyle = '#151515';
+                ctx.save();
+                ctx.translate(0.42, 0.04);
+                ctx.rotate(0.05);
+                ctx.beginPath();
+                ctx.roundRect(-0.06, 0, 0.14, 0.42, 0.03);
+                ctx.fill(); ctx.stroke();
+                ctx.restore();
+
+                // Tactical Grip
+                ctx.save();
+                ctx.translate(0.18, 0.04);
+                ctx.rotate(0.15);
+                ctx.fillStyle = '#1a1a1a';
+                ctx.roundRect(-0.07, 0, 0.15, 0.32, 0.03);
+                ctx.fill(); ctx.stroke();
+                ctx.restore();
+
+                // Barrel with Muzzle Brake
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0.65, -0.14, 0.15, 0.1);
+                ctx.fillStyle = '#222';
+                ctx.fillRect(0.8, -0.16, 0.08, 0.14); // Brake
+                break;
+
+            case 'shotgun':
+                // --- SHOTGUN MODEL (Heavy Duty Pump) ---
+                // Main Body / Receiver
+                ctx.fillStyle = '#3a3a3a';
+                ctx.beginPath();
+                ctx.roundRect(-0.1, -0.18, 0.6, 0.22, 0.02);
+                ctx.fill(); ctx.stroke();
+
+                // Dual Barrel Setup (implied)
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.roundRect(0.5, -0.16, 0.8, 0.16, 0.01);
+                ctx.fill(); ctx.stroke();
+
+                // Pump / Forend (Ribbed)
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.roundRect(0.45, 0, 0.4, 0.16, 0.04);
+                ctx.fill(); ctx.stroke();
+                for (let i = 0; i < 3; i++) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                    ctx.beginPath();
+                    ctx.moveTo(0.55 + i * 0.1, 0.02);
+                    ctx.lineTo(0.55 + i * 0.1, 0.14);
+                    ctx.stroke();
+                }
+
+                // Pistol Grip and Stock base
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.moveTo(0, 0.04);
+                ctx.lineTo(-0.25, 0.25);
+                ctx.lineTo(0.1, 0.25);
+                ctx.lineTo(0.18, 0.04);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+                break;
+
+            case 'rifle':
+                // --- RIFLE MODEL (Modern Assault Rifle) ---
+                // Upper Receiver
+                ctx.fillStyle = '#3a3a3a';
+                ctx.beginPath();
+                ctx.roundRect(0, -0.24, 0.7, 0.22, 0.05);
+                ctx.fill(); ctx.stroke();
+
+                // Long Barrel with Suppressor style tip
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0.7, -0.16, 0.65, 0.08);
+                ctx.fillStyle = '#1a1a1a';
+                ctx.roundRect(1.1, -0.19, 0.3, 0.14, 0.02); // Muzzle device
+                ctx.fill(); ctx.stroke();
+
+                // Handguard (Vented)
+                ctx.fillStyle = '#222';
+                ctx.roundRect(0.45, -0.05, 0.35, 0.18, 0.02);
+                ctx.fill(); ctx.stroke();
+
+                // Long Stamped Magazine
+                ctx.save();
+                ctx.translate(0.4, 0.05);
+                ctx.rotate(-0.15);
+                ctx.fillStyle = '#1a1a1a';
+                ctx.roundRect(-0.07, 0, 0.16, 0.5, 0.05);
+                ctx.fill(); ctx.stroke();
+                ctx.restore();
+
+                // Adjustable Stock
+                ctx.beginPath();
+                ctx.moveTo(0, -0.24);
+                ctx.lineTo(-0.45, 0.15);
+                ctx.lineTo(-0.2, 0.15);
+                ctx.lineTo(0.1, -0.02);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+                break;
+
+            default:
+                // --- PISTOL MODEL (Modern Sidearm) ---
+                // Grip
+                ctx.save();
+                ctx.translate(0.18, 0.0);
+                ctx.rotate(0.2);
+                ctx.fillStyle = '#151515';
+                ctx.roundRect(-0.09, -0.02, 0.2, 0.42, 0.04);
+                ctx.fill(); ctx.stroke();
+                ctx.restore();
+
+                // Frame
+                ctx.fillStyle = '#2a2a2a';
+                ctx.beginPath();
+                ctx.roundRect(0.08, -0.05, 0.55, 0.15, 0.02);
+                ctx.fill(); ctx.stroke();
+
+                // Slide (Two-tone look)
+                ctx.fillStyle = '#3a3a3a';
+                ctx.beginPath();
+                ctx.roundRect(0.05, -0.26, 0.85, 0.22, 0.04);
+                ctx.fill(); ctx.stroke();
+
+                // Slide Detail (Ejection Port)
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0.35, -0.22, 0.15, 0.06);
+                break;
         }
-        ctx.restore();
 
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 0.03;
-
-        // Slide / Upper receiver (main body)
-        ctx.fillStyle = '#3a3a3a';
-        ctx.beginPath();
-        ctx.moveTo(0.08, -0.22);
-        ctx.lineTo(0.82, -0.22);
-        ctx.lineTo(0.88, -0.18); // Tapered muzzle
-        ctx.lineTo(0.88, -0.04);
-        ctx.lineTo(0.08, -0.04);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Lower frame / receiver
-        ctx.fillStyle = '#2a2a2a';
-        ctx.beginPath();
-        ctx.moveTo(0.08, -0.04);
-        ctx.lineTo(0.55, -0.04);
-        ctx.lineTo(0.55, 0.06);
-        ctx.lineTo(0.08, 0.06);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Trigger guard
-        ctx.fillStyle = 'transparent';
-        ctx.strokeStyle = '#222';
-        ctx.lineWidth = 0.03;
-        ctx.beginPath();
-        ctx.moveTo(0.25, 0.06);
-        ctx.lineTo(0.25, 0.16);
-        ctx.quadraticCurveTo(0.32, 0.22, 0.42, 0.16);
-        ctx.lineTo(0.42, 0.06);
-        ctx.stroke();
-
-        // Trigger
-        ctx.strokeStyle = '#555';
-        ctx.lineWidth = 0.025;
-        ctx.beginPath();
-        ctx.moveTo(0.33, 0.06);
-        ctx.lineTo(0.31, 0.14);
-        ctx.stroke();
-
-        // Ejection port
-        ctx.fillStyle = '#222';
-        ctx.fillRect(0.4, -0.20, 0.12, 0.08);
-
-        // Serrations on slide (rear)
-        ctx.strokeStyle = '#555';
-        ctx.lineWidth = 0.015;
-        for (let i = 0; i < 4; i++) {
-            const sx = 0.12 + i * 0.04;
-            ctx.beginPath();
-            ctx.moveTo(sx, -0.21);
-            ctx.lineTo(sx, -0.05);
-            ctx.stroke();
-        }
-
-        // Front sight
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0.78, -0.26, 0.03, 0.04);
-
-        // Rear sight
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0.14, -0.26, 0.03, 0.04);
-        ctx.fillRect(0.22, -0.26, 0.03, 0.04);
-
-        // Muzzle hole
+        // Common Muzzle Detail (Hole with glow)
         ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.arc(0.88, -0.11, 0.035, 0, Math.PI * 2);
+        let mX = 0.88;
+        if (this.currentWeapon === 'smg') mX = 0.85;
+        if (this.currentWeapon === 'shotgun') mX = 1.25;
+        if (this.currentWeapon === 'rifle') mX = 1.35;
+        ctx.arc(mX, -0.1, 0.04, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.restore();
+        // Subtle barrel glint
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 0.02;
+        ctx.beginPath();
+        ctx.moveTo(0.2, -0.2);
+        ctx.lineTo(mX - 0.2, -0.2);
+        ctx.stroke();
 
-        ctx.restore(); // End Main Transform (this.x, this.y)
+        ctx.restore();
     }
 }

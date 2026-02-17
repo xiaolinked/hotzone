@@ -375,27 +375,10 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.save();
 
-    const outerR = 16;
     const innerGap = 5;
-    const lineLen = 12;
-    const col = 'rgba(0, 255, 80, 0.85)';
-    const colDim = 'rgba(0, 255, 80, 0.3)';
+    const lineLen = 10;
+    const col = 'rgba(255, 40, 40, 0.9)';
 
-    // Outer ring
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(mx, my, outerR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Subtle outer glow ring
-    ctx.strokeStyle = colDim;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(mx, my, outerR + 2, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Crosshair lines (with center gap)
     ctx.strokeStyle = col;
     ctx.lineWidth = 1.5;
 
@@ -422,20 +405,6 @@ export class Renderer {
     ctx.moveTo(mx + innerGap, my);
     ctx.lineTo(mx + innerGap + lineLen, my);
     ctx.stroke();
-
-    // Tick marks on ring (small lines at 45° intervals)
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 4; i++) {
-      const angle = (Math.PI / 4) + (Math.PI / 2) * i;
-      const x1 = mx + Math.cos(angle) * (outerR - 3);
-      const y1 = my + Math.sin(angle) * (outerR - 3);
-      const x2 = mx + Math.cos(angle) * (outerR + 3);
-      const y2 = my + Math.sin(angle) * (outerR + 3);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-    }
 
     // Center dot
     ctx.fillStyle = col;
@@ -668,16 +637,20 @@ export class Renderer {
         costFont = `bold ${Math.max(10, Math.floor(18 * scale))}px monospace`;
       }
 
-      const totalWidth = cardWidth * 3 + spacing * 2;
+      const cardsPerRow = 3;
+      const totalWidth = cardWidth * cardsPerRow + spacing * (cardsPerRow - 1);
       const startX = centerX - totalWidth / 2;
-      const cardY = 180;
+      const startY = 180;
 
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < game.currentShopOptions.length; i++) {
         const opt = game.currentShopOptions[i];
         if (!opt) continue;
 
-        const x = startX + i * (cardWidth + spacing);
-        const y = cardY;
+        const row = Math.floor(i / cardsPerRow);
+        const col = i % cardsPerRow;
+
+        const x = startX + col * (cardWidth + spacing);
+        const y = startY + row * (cardHeight + spacing);
 
         const mx = input.mouse.x;
         const my = input.mouse.y;
@@ -710,7 +683,7 @@ export class Renderer {
         ctx.translate(x + cardWidth / 2, y + cardHeight * 0.22);
         // Scale icon if card is small
         if (cardWidth < 150) ctx.scale(cardWidth / 260, cardWidth / 260);
-        this.drawUpgradeIcon(ctx, opt.type, isHovered);
+        this.drawUpgradeIcon(ctx, opt.type, isHovered, (opt as any).weaponId);
         ctx.restore();
 
         // 4. Content
@@ -739,24 +712,40 @@ export class Renderer {
         });
 
         // Cost Section
+        const isWeapon = opt.type === 'weapon';
+        const weaponId = (opt as any).weaponId;
+        const isOwned = isWeapon && game.hero.ownedWeapons.includes(weaponId);
+        const isEquipped = isWeapon && game.hero.currentWeapon === weaponId;
+
         const afford = game.coinCount >= opt.cost;
         const costY = y + cardHeight - cardHeight * 0.14;
 
         // Cost bar
-        ctx.fillStyle = afford
+        ctx.fillStyle = (isOwned || afford)
           ? "rgba(0, 255, 100, 0.1)"
           : "rgba(255, 0, 0, 0.1)";
         ctx.fillRect(x + 10, costY - 20, cardWidth - 20, 40);
 
         ctx.font = costFont;
-        ctx.fillStyle = afford ? "#00FF88" : "#FF4444";
-        ctx.fillText(`COINS: ${opt.cost}`, x + cardWidth / 2, costY + 5);
+        if (isEquipped) {
+          ctx.fillStyle = "#00FF88";
+          ctx.fillText("EQUIPPED", x + cardWidth / 2, costY + 5);
+        } else if (isOwned) {
+          ctx.fillStyle = "#FFD84D"; // Gold
+          // Adaptive font for long text
+          if (cardWidth < 150) ctx.font = `bold ${Math.max(8, Math.floor(14 * (cardWidth / 260)))}px monospace`;
+          ctx.fillText("ALREADY PURCHASED", x + cardWidth / 2, costY + 5);
+        } else {
+          ctx.fillStyle = afford ? "#00FF88" : "#FF4444";
+          ctx.fillText(`COINS: ${opt.cost}`, x + cardWidth / 2, costY + 5);
+        }
 
         ctx.restore();
       }
 
       // Reroll Button
-      const rerollBtnY = cardY + cardHeight + 30;
+      const rowCount = Math.ceil(game.currentShopOptions.length / cardsPerRow);
+      const rerollBtnY = startY + rowCount * (cardHeight + spacing) - spacing + 30;
       const canAffordReroll = game.coinCount >= game.rerollCost;
 
       // Button background
@@ -880,12 +869,11 @@ export class Renderer {
   private drawPermanentStatsBar(game: Game) {
     const ctx = this.ctx;
     const config = ConfigManager.getConfig();
-    const height = this.height;
 
     const barWidth = 220; // Increased width
-    const barHeight = 320; // Increased height
+    const barHeight = 375; // Increased height
     const x = 15;
-    const y = height / 2 - barHeight / 2;
+    const y = 230; // Anchored below score/coins box
 
     const input = InputManager.getInstance();
 
@@ -1018,6 +1006,11 @@ export class Renderer {
 
       const stats = [
         {
+          label: "WEAPON",
+          value: game.hero.currentWeapon.toUpperCase(),
+          color: "#E67E22",
+        },
+        {
           label: "HEALTH",
           value: `${Math.ceil(game.hero.hp)}/${game.hero.maxHp}`,
           color: "#2ECC71",
@@ -1034,15 +1027,15 @@ export class Renderer {
         },
         {
           label: "DAMAGE",
-          value: config.blaster.bullet_damage,
+          value: game.hero.weaponDamage,
           color: "#FF4E00",
         },
         {
           label: "FIRE RATE",
-          value: `${(1 / config.blaster.fire_rate).toFixed(1)}/s`,
+          value: `${(1 / game.hero.weaponFireRate).toFixed(1)}/s`,
           color: "#FF7B00",
         },
-        { label: "SHOTS", value: `x${game.hero.multishot}`, color: "#F1C40F" },
+        { label: "SHOTS", value: `x${game.hero.weaponMultishot + (game.hero.multishot - 1)}`, color: "#F1C40F" },
         {
           label: "ARMOR",
           value: `${(config.hero.armor.damage_reduction_percent * 100).toFixed(0)}%`,
@@ -1052,6 +1045,11 @@ export class Renderer {
           label: "SPEED",
           value: config.hero.move_speed.toFixed(1),
           color: "#9B59B6",
+        },
+        {
+          label: "CRIT",
+          value: `${(game.hero.critChance * 100).toFixed(0)}%`,
+          color: "#FFD700",
         },
       ];
 
@@ -1420,14 +1418,6 @@ export class Renderer {
       "ENEMY INDEX",
       "#FFD84D",
     );
-    this.drawButton(
-      this.width / 2,
-      this.height / 2 + 120,
-      240,
-      50,
-      "STATS",
-      "#5DADE2",
-    );
 
     ctx.font = "16px sans-serif";
     ctx.fillStyle = "#AAA";
@@ -1787,19 +1777,29 @@ export class Renderer {
         color: "#2E86C1",
       },
       {
+        label: "WEAPON",
+        value: game.hero.currentWeapon.toUpperCase(),
+        color: "#E67E22",
+      },
+      {
         label: "BLASTER DAMAGE",
-        value: config.blaster.bullet_damage.toString(),
+        value: game.hero.weaponDamage.toString(),
         color: "#FF4E00",
       },
       {
         label: "FIRE RATE",
-        value: `${(1 / config.blaster.fire_rate).toFixed(1)} shots/sec`,
+        value: `${(1 / game.hero.weaponFireRate).toFixed(1)} shots/sec`,
         color: "#FF7B00",
       },
       {
         label: "ARMOR",
         value: `${(config.hero.armor.damage_reduction_percent * 100).toFixed(0)}% Reduction`,
         color: "#BDC3C7",
+      },
+      {
+        label: "CRIT CHANCE",
+        value: `${(game.hero.critChance * 100).toFixed(0)}%`,
+        color: "#FFD700",
       },
     ];
 
@@ -1827,6 +1827,7 @@ export class Renderer {
     ctx: CanvasRenderingContext2D,
     type: string,
     isHovered: boolean,
+    weaponId?: string,
   ) {
     ctx.save();
     const pulse = (Math.sin(Date.now() * 0.008) + 1) / 2;
@@ -1933,6 +1934,59 @@ export class Renderer {
         ctx.lineTo(0, 15);
         ctx.lineTo(-10, 0);
         ctx.closePath();
+        ctx.stroke();
+        break;
+      case "crit":
+        // Star / Crit
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+          const outerA = (Math.PI * 2 / 5) * i - Math.PI / 2;
+          const innerA = outerA + Math.PI / 5;
+          ctx.lineTo(Math.cos(outerA) * 22, Math.sin(outerA) * 22);
+          ctx.lineTo(Math.cos(innerA) * 10, Math.sin(innerA) * 10);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      case "weapon":
+        // Gun silhouettes
+        ctx.lineWidth = 3;
+        if (weaponId === 'smg') {
+          // SMG silhouette (Stocky, vertical mag)
+          ctx.beginPath();
+          ctx.roundRect(-22, -6, 40, 10, 2); // Main body
+          ctx.roundRect(-5, 4, 8, 18, 1);    // Grip
+          ctx.roundRect(5, 4, 6, 12, 1);     // Mag
+          ctx.stroke();
+        } else if (weaponId === 'shotgun') {
+          // Shotgun silhouette (Long, pump action)
+          ctx.beginPath();
+          ctx.roundRect(-28, -5, 55, 8, 1);  // Length
+          ctx.roundRect(-28, 3, 15, 6, 2);   // Stock
+          ctx.roundRect(0, 4, 20, 5, 2);     // Pump
+          ctx.stroke();
+        } else if (weaponId === 'rifle') {
+          // Rifle silhouette (Longest, sleek)
+          ctx.beginPath();
+          ctx.roundRect(-30, -6, 65, 9, 2);  // Body/Barrel
+          ctx.roundRect(-30, 3, 20, 10, 1);  // Full stock
+          ctx.roundRect(-5, 3, 8, 15, 1);    // Grip
+          ctx.roundRect(10, 3, 6, 14, 1);    // Curved-ish mag
+          ctx.stroke();
+        } else {
+          // Default Pistol
+          ctx.beginPath();
+          ctx.roundRect(-20, -8, 35, 12, 3); // Slide
+          ctx.roundRect(-5, 4, 10, 18, 2);   // Grip
+          ctx.stroke();
+        }
+
+        // Muzzle flash for all weapons
+        ctx.strokeStyle = isHovered ? "#FFD700" : "#FF8800";
+        ctx.beginPath();
+        ctx.moveTo(15, -4); ctx.lineTo(24, -12);
+        ctx.moveTo(18, 0); ctx.lineTo(28, 0);
+        ctx.moveTo(15, 4); ctx.lineTo(24, 12);
         ctx.stroke();
         break;
     }

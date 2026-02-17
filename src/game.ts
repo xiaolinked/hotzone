@@ -11,11 +11,20 @@ import { AudioManager } from './audio/AudioManager';
 import { RICK_ROLL_NOTES } from './rickroll';
 
 export interface UpgradeOption {
-    type: 'damage' | 'firerate' | 'multishot' | 'health' | 'stamina' | 'ammo' | 'regen' | 'armor';
+    type: 'damage' | 'firerate' | 'multishot' | 'health' | 'stamina' | 'ammo' | 'regen' | 'armor' | 'crit' | 'weapon';
     name: string;
     description: string;
     cost: number;
+    weaponId?: string;
 }
+
+// Weapon stat definitions
+const WEAPON_STATS: { [id: string]: { damage: number, fireRate: number, range: number, magSize: number, reloadTime: number, spread: number, multishot: number, bulletSpeed: number } } = {
+    pistol: { damage: 10, fireRate: 0.42, range: 25, magSize: 10, reloadTime: 1.2, spread: 0, multishot: 1, bulletSpeed: 18 },
+    smg: { damage: 4, fireRate: 0.12, range: 20, magSize: 25, reloadTime: 1.5, spread: 0.08, multishot: 1, bulletSpeed: 20 },
+    shotgun: { damage: 14, fireRate: 0.7, range: 12, magSize: 6, reloadTime: 2.0, spread: 0.12, multishot: 5, bulletSpeed: 16 },
+    rifle: { damage: 25, fireRate: 0.55, range: 35, magSize: 8, reloadTime: 1.8, spread: 0, multishot: 1, bulletSpeed: 28 },
+};
 
 export class Game {
     private lastTime: number = 0;
@@ -34,7 +43,6 @@ export class Game {
     public combos: { x: number, y: number, text: string, timer: number }[] = [];
     public currentShopOptions: UpgradeOption[] = [];
     public rerollCost: number = 0;
-    private previousShopTypes: string[] = [];
 
     private shopCooldown: number = 0;
     public hitStopTimer: number = 0;
@@ -103,17 +111,16 @@ export class Game {
                 const ch = height / 2;
 
                 // Pause Menu Buttons
-                const isResume = Math.abs(mx - cx) < 120 && Math.abs(my - (ch - 20)) < 25;
-                const isIndex = Math.abs(mx - cx) < 120 && Math.abs(my - (ch + 50)) < 25;
-                const isStats = Math.abs(mx - cx) < 120 && Math.abs(my - (ch + 120)) < 25;
+                const inResumeBtn = Math.abs(mx - cx) < 120 && Math.abs(my - (ch - 20)) < 25;
+                const inIndexBtn = Math.abs(mx - cx) < 120 && Math.abs(my - (ch + 50)) < 25;
 
-                if (isInPauseHUD || isResume) {
-                    this.togglePause();
-                    this.pauseCooldown = 0.3;
-                } else if (isIndex) {
+                if (inResumeBtn || isInPauseHUD) {
+                    this.isPaused = false;
+                    return;
+                }
+                if (inIndexBtn) {
                     this.waveManager.openIndex();
-                } else if (isStats) {
-                    this.waveManager.openStats();
+                    return;
                 }
             }
 
@@ -160,6 +167,7 @@ export class Game {
     }
 
     public restart() {
+        const config = ConfigManager.getConfig();
         AudioManager.stopRickRoll();
         this.hero = new Hero(0, 0);
         this.enemies = [];
@@ -174,8 +182,7 @@ export class Game {
         this.isRickRolled = false;
         this.deathPauseTimer = 0;
         this.deathHighlightTimer = 0;
-        this.rerollCost = 0;
-        this.previousShopTypes = [];
+        this.rerollCost = config.shop.reroll_base_cost;
         this.generateUpgradeOptions();
         console.log("Game Restarted");
     }
@@ -207,8 +214,16 @@ export class Game {
         if (!opt) return;
 
         const config = ConfigManager.getConfig();
-        if (this.coinCount >= opt.cost) {
-            this.coinCount -= opt.cost;
+        const wId = opt.weaponId || 'pistol';
+        const isWeapon = opt.type === 'weapon';
+        const isWeaponOwned = isWeapon && this.hero.ownedWeapons.includes(wId);
+
+        if (isWeaponOwned || this.coinCount >= opt.cost) {
+            // Deduct coins only if it's NOT a free weapon switch
+            if (!isWeaponOwned) {
+                this.coinCount -= opt.cost;
+            }
+
             this.shopCooldown = config.ui.shop.cooldown_after_buy;
             AudioManager.playBuy();
 
@@ -244,12 +259,34 @@ export class Game {
                 case 'armor':
                     config.hero.armor.damage_reduction_percent = Math.min(0.9, config.hero.armor.damage_reduction_percent + 0.05);
                     break;
+                case 'crit':
+                    this.hero.critChance = Math.min(1.0, this.hero.critChance + 0.02);
+                    break;
+                case 'weapon': {
+                    const ws = WEAPON_STATS[wId];
+                    if (ws) {
+                        this.hero.equipWeapon(wId, ws);
+                    }
+                    break;
+                }
             }
-            this.currentShopOptions[index] = null as any;
 
-            // AS REQUESTED: IMMEDIATELY TRIGGER NEXT WAVE AFTER PURCHASE
-            this.waveManager.triggerNextPhase();
+            // PER USER REQUEST:
+            // 1. If it was a weapon purchase/switch, DO NOT remove the option (so player can switch back/forth)
+            // 2. If it was a stat upgrade, REMOVE ALL OTHER stat upgrades from the shop
+            if (!isWeapon) {
+                this.currentShopOptions = this.currentShopOptions.map(o => {
+                    if (o && o.type !== 'weapon') return null as any;
+                    return o;
+                });
+            } else if (!isWeaponOwned) {
+                // For a NEW weapon purchase, we could clear it or keep it as "Owned".
+                // I'll keep it so it shows "ALREADY PURCHASED" instantly.
+            }
+
+            // MANUAL DEPLOY ONLY: Removed triggerNextPhase()
         } else {
+            // This 'else' still applies to non-weapon upgrades or general cost check failure
             this.shopCooldown = ConfigManager.getConfig().ui.shop.cooldown_after_buy;
         }
     }
@@ -334,22 +371,13 @@ export class Game {
             return;
         }
 
-        if (this.waveManager.isShopOpen || this.waveManager.isReady || this.waveManager.isIndexOpen || this.waveManager.isStatsOpen) {
+        if (this.waveManager.isShopOpen || this.waveManager.isReady || this.waveManager.isIndexOpen) {
             const mx = input.mouse.x;
             const my = input.mouse.y;
             const cx = window.innerWidth / 2;
             const h = window.innerHeight;
             const width = window.innerWidth;
             const height = window.innerHeight;
-
-            if (this.waveManager.isStatsOpen) {
-                const inBackBtn = Math.abs(mx - cx) < 100 && Math.abs(my - (height - 80)) < 30;
-                if ((clickHappened && inBackBtn) || input.keys['escape']) {
-                    this.waveManager.triggerNextPhase();
-                    return;
-                }
-                return;
-            }
 
             if (this.waveManager.isIndexOpen) {
                 const inCloseBtn = Math.abs(mx - (width - 100)) < 80 && Math.abs(my - (height - 50)) < 25;
@@ -440,18 +468,34 @@ export class Game {
                         spacing = 10;
                     }
 
-                    const totalWidth = (cardWidth * optionsPerWave) + (spacing * (optionsPerWave - 1));
+                    const cardsPerRow = 3;
+                    const totalWidth = (cardWidth * cardsPerRow) + (spacing * (cardsPerRow - 1));
                     const startX = cx - totalWidth / 2;
+                    const optionsCount = this.currentShopOptions.length;
 
-                    for (let i = 0; i < optionsPerWave; i++) {
+                    for (let i = 0; i < optionsCount; i++) {
                         const opt = this.currentShopOptions[i];
                         if (!opt) continue;
-                        const x = startX + i * (cardWidth + spacing);
-                        const y = startY;
+
+                        const row = Math.floor(i / cardsPerRow);
+                        const col = i % cardsPerRow;
+
+                        const x = startX + col * (cardWidth + spacing);
+                        const y = startY + row * (cardHeight + spacing);
+
                         if (mx >= x && mx <= x + cardWidth && my >= y && my <= y + cardHeight) {
                             this.buyUpgrade(i);
-                            break;
+                            return; // Success
                         }
+                    }
+
+                    // Reroll Hit Detection
+                    const rowCount = Math.ceil(optionsCount / cardsPerRow);
+                    const rerollBtnY = startY + rowCount * (cardHeight + spacing) - spacing + 30;
+                    const inRerollBtn = Math.abs(mx - cx) < 100 && Math.abs(my - rerollBtnY) < 22;
+                    if (inRerollBtn && this.coinCount >= this.rerollCost) {
+                        this.rerollShop();
+                        return;
                     }
                 }
             }
@@ -563,40 +607,56 @@ export class Game {
         const config = ConfigManager.getConfig();
         const pool: UpgradeOption[] = config.shop.upgrades as UpgradeOption[];
 
-        // Filter pool: only multishot if wave >= 5
+        // Filter pool: only multishot if wave >= 5, filter owned weapons
         let filteredPool = pool;
         if (this.waveManager.currentWave < 5) {
             filteredPool = pool.filter(opt => opt.type !== 'multishot');
         }
 
-        // Avoid showing the same set of types back-to-back
-        let availablePool = filteredPool;
-        if (this.previousShopTypes.length > 0) {
-            const nonRepeat = filteredPool.filter(opt => !this.previousShopTypes.includes(opt.type));
-            // Only use the filtered pool if we have enough options
-            if (nonRepeat.length >= config.shop.options_per_wave) {
-                availablePool = nonRepeat;
-            }
-        }
+        // Separate weapons and other upgrades
+        let weapons = pool.filter(opt => opt.type === 'weapon');
+        let otherUpgrades = filteredPool.filter(opt => opt.type !== 'weapon');
 
-        const shuffled = [...availablePool].sort(() => 0.5 - Math.random());
+        // Shuffle other upgrades
+        const shuffledOthers = [...otherUpgrades].sort(() => 0.5 - Math.random());
+
+        let finalOptions: UpgradeOption[] = [];
+
+        // Always include all weapons (first 3 slots)
+        finalOptions.push(...weapons);
+
+        // Fill the rest with random other upgrades
+        while (finalOptions.length < config.shop.options_per_wave && shuffledOthers.length > 0) {
+            finalOptions.push(shuffledOthers.shift()!);
+        }
 
         // Scale price based on wave: starts at 50% for wave 1, increases by 30% each wave
         const priceFactor = 0.2 + (this.waveManager.currentWave * 0.3);
 
-        this.currentShopOptions = shuffled.slice(0, config.shop.options_per_wave).map(opt => ({
-            ...opt,
-            cost: Math.floor(opt.cost * priceFactor)
-        }));
-
-        // Save current types for next reroll's duplicate prevention
-        this.previousShopTypes = this.currentShopOptions.map(opt => opt.type);
+        this.currentShopOptions = finalOptions.map(opt => {
+            const isWeapon = opt.type === 'weapon';
+            return {
+                ...opt,
+                // Weapons ignore scaling
+                cost: isWeapon ? opt.cost : Math.floor(opt.cost * priceFactor)
+            };
+        });
 
         // One item is always cheap: base 15-18 coins, +3 per wave
-        if (this.currentShopOptions.length > 0) {
-            const cheapIdx = Math.floor(Math.random() * this.currentShopOptions.length);
+        // BUT it cannot be a weapon
+        const nonWeaponIndices = this.currentShopOptions
+            .map((opt, i) => opt && opt.type !== 'weapon' ? i : -1)
+            .filter(i => i !== -1);
+
+        if (nonWeaponIndices.length > 0) {
+            const cheapIdx = nonWeaponIndices[Math.floor(Math.random() * nonWeaponIndices.length)];
             const baseCheap = 15 + Math.floor(Math.random() * 4); // 15-18
-            this.currentShopOptions[cheapIdx].cost = baseCheap + (this.waveManager.currentWave - 1) * 3;
+            const finalCheapCost = baseCheap + (this.waveManager.currentWave - 1) * 3;
+
+            // Only apply if it's actually cheaper than current scaled cost
+            if (finalCheapCost < this.currentShopOptions[cheapIdx].cost) {
+                this.currentShopOptions[cheapIdx].cost = finalCheapCost;
+            }
         }
     }
 
