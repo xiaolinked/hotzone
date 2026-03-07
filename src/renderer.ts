@@ -33,6 +33,20 @@ export class Renderer {
     this.rickImg = new Image();
     this.rickImg.src = "/rick.gif";
 
+    // Pre-load Gun Sprite
+    const gunImg = new Image();
+    gunImg.src = "/src/assets/images/gun_sprite.png";
+    gunImg.onload = () => {
+        (window as any).__GUN_IMG = gunImg;
+    };
+
+    // Pre-load Realistic Hero Sprite
+    const heroImg = new Image();
+    heroImg.src = "/src/assets/images/hero_sprite.png";
+    heroImg.onload = () => {
+        (window as any).__HERO_IMG = heroImg;
+    };
+
     // Pre-generate some star data for parallax chunks
     for (let i = 0; i < 200; i++) {
       this.stars.push({

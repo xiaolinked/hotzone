@@ -19,7 +19,7 @@
         },
         "stamina": {
             "base": 100,
-            "regen_rate": 28,
+            "regen_rate": 14,
             "regen_delay_after_dash": 0.5,
             "max_cap": 500,
             "upgrade_increment": 20
