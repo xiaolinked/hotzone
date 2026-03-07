@@ -601,13 +601,6 @@ export class Renderer {
       ctx.font = "bold 36px monospace";
       ctx.fillText("SHOP", centerX, 50);
 
-      // Stats in Shop removed as requested
-      // ctx.font = 'bold 18px monospace';
-      // ctx.fillStyle = '#2ECC71';
-      // ctx.fillText(`HEALTH: ${Math.ceil(game.hero.hp)}/${game.hero.maxHp}`, centerX - 180, 85);
-      // ctx.fillStyle = '#5DADE2';
-      // ctx.fillText(`STAMINA: ${Math.ceil(game.hero.stamina)}/${game.hero.maxStamina}`, centerX + 180, 85);
-
       this.drawButton(centerX, 110, 240, 45, "DEPLOY TO NEXT WAVE", "#FF4E00");
 
       // 2. Upgrade Cards
@@ -640,7 +633,13 @@ export class Renderer {
       const cardsPerRow = 3;
       const totalWidth = cardWidth * cardsPerRow + spacing * (cardsPerRow - 1);
       const startX = centerX - totalWidth / 2;
-      const startY = 180;
+      const startY = 180 + game.shopScrollOffset;
+
+      // Create clipping region to prevent scrolling over the title/button
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 150, this.width, this.height - 150);
+      ctx.clip();
 
       for (let i = 0; i < game.currentShopOptions.length; i++) {
         const opt = game.currentShopOptions[i];
@@ -748,6 +747,17 @@ export class Renderer {
       const rerollBtnY = startY + rowCount * (cardHeight + spacing) - spacing + 30;
       const canAffordReroll = game.coinCount >= game.rerollCost;
 
+      this.drawButton(
+        centerX,
+        rerollBtnY,
+        200,
+        45,
+        `REROLL (${game.rerollCost})`,
+        canAffordReroll ? "#FFD84D" : "#888888",
+      );
+
+      // Restore clipping context
+      ctx.restore();
       // Button background
       ctx.save();
       const rBtnW = 200;

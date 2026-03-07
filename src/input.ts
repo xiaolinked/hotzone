@@ -8,6 +8,7 @@ export class InputManager {
     public cameraOffset: { x: number; y: number } = { x: 0, y: 0 };
 
     public isTouchDevice: boolean = false;
+    public scrollDeltaY: number = 0;
 
     // Joystick State
     public stickLeft: { x: number, y: number, active: boolean, id: number | null, originX: number, originY: number } = { x: 0, y: 0, active: false, id: null, originX: 0, originY: 0 };
@@ -19,11 +20,9 @@ export class InputManager {
     public isJoystickDisabled: boolean = false;
 
     private constructor() {
-        // Feature detection for touch + Mobile Check + Chromebook Support
-        this.isTouchDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-            window.innerWidth < 800 ||
-            ('ontouchstart' in window) ||
-            ((navigator.maxTouchPoints || 0) > 0);
+        // More strict Mobile UI detection to avoid false positives on touchscreen laptops (Chromebooks)
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        this.isTouchDevice = isMobileUA || (window.innerWidth < 800 && ('ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0));
 
         window.addEventListener('keydown', (e) => this.keys[e.key.toLowerCase()] = true);
         window.addEventListener('keyup', (e) => this.keys[e.key.toLowerCase()] = false);
@@ -38,6 +37,13 @@ export class InputManager {
         });
         window.addEventListener('mouseup', () => this.mouse.leftDown = false);
         window.addEventListener('resize', () => this.updateMouseWorld());
+        
+        // Scrolling
+        window.addEventListener('wheel', (e) => {
+            if (Math.abs(e.deltaY) > 0) {
+                this.scrollDeltaY += e.deltaY;
+            }
+        });
 
         // Touch Listeners
         if (this.isTouchDevice) {

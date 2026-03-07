@@ -37,7 +37,9 @@ export class Hero extends Entity {
 
     // Weapon system
     public currentWeapon: string = 'pistol';
-    public ownedWeapons: string[] = ['pistol'];
+    public ownedWeapons: string[] = ['pistol']; 
+
+    private recoilVelocity: { x: number, y: number } = { x: 0, y: 0 };
     public weaponDamage: number = 10;
     public weaponFireRate: number = 0.42;
     public weaponRange: number = 25;
@@ -200,14 +202,27 @@ export class Hero extends Entity {
                 const spawnX = this.x + cosA * gunTipLocalX - sinA * (gunTipLocalY * flipY);
                 const spawnY = this.y + sinA * gunTipLocalX + cosA * (gunTipLocalY * flipY);
 
+                // Randomize speed slightly (-5% to +5%)
+                const speedSpread = Math.random() * 0.1 - 0.05;
+                const finalSpeed = this.weaponBulletSpeed * (1 + speedSpread);
+
                 for (let i = 0; i < totalMultishot; i++) {
                     const offset = (i - (totalMultishot - 1) / 2) * spread;
                     const angle = baseAngle + offset;
                     const targetX = spawnX + Math.cos(angle) * config.blaster.multishot_target_distance;
                     const targetY = spawnY + Math.sin(angle) * config.blaster.multishot_target_distance;
 
-                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY, this.critChance, this.currentWeapon, this.weaponDamage, this.weaponBulletSpeed, this.weaponRange));
+                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY, this.critChance, this.currentWeapon, this.weaponDamage, finalSpeed, this.weaponRange));
                 }
+
+                // Apply Recoil Pushback
+                let recoilForce = 2.0;
+                if (this.currentWeapon === 'shotgun') recoilForce = 12.0;
+                if (this.currentWeapon === 'smg') recoilForce = 1.0;
+                if (this.currentWeapon === 'rifle') recoilForce = 6.0;
+
+                this.recoilVelocity.x -= Math.cos(baseAngle) * recoilForce;
+                this.recoilVelocity.y -= Math.sin(baseAngle) * recoilForce;
 
                 AudioManager.playShoot();
 
@@ -243,6 +258,13 @@ export class Hero extends Entity {
         } else {
             this.walkTimer = 0;
         }
+
+        // Apply Recoil Physics
+        this.x += this.recoilVelocity.x * dt;
+        this.y += this.recoilVelocity.y * dt;
+        // Dampen recoil
+        this.recoilVelocity.x *= 0.85;
+        this.recoilVelocity.y *= 0.85;
 
         // 4. Stamina Regen
         if (!this.isDashing) {

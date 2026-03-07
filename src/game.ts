@@ -21,7 +21,7 @@ export interface UpgradeOption {
 // Weapon stat definitions
 const WEAPON_STATS: { [id: string]: { damage: number, fireRate: number, range: number, magSize: number, reloadTime: number, spread: number, multishot: number, bulletSpeed: number } } = {
     pistol: { damage: 10, fireRate: 0.42, range: 25, magSize: 10, reloadTime: 1.2, spread: 0, multishot: 1, bulletSpeed: 18 },
-    smg: { damage: 4, fireRate: 0.12, range: 20, magSize: 25, reloadTime: 1.5, spread: 0.08, multishot: 1, bulletSpeed: 20 },
+    smg: { damage: 4, fireRate: 0.12, range: 20, magSize: 20, reloadTime: 1.5, spread: 0.08, multishot: 1, bulletSpeed: 20 },
     shotgun: { damage: 14, fireRate: 0.7, range: 12, magSize: 6, reloadTime: 2.0, spread: 0.12, multishot: 5, bulletSpeed: 16 },
     rifle: { damage: 25, fireRate: 0.55, range: 35, magSize: 8, reloadTime: 1.8, spread: 0, multishot: 1, bulletSpeed: 28 },
 };
@@ -42,9 +42,9 @@ export class Game {
     public coinCount: number = 0;
     public combos: { x: number, y: number, text: string, timer: number }[] = [];
     public currentShopOptions: UpgradeOption[] = [];
-    public rerollCost: number = 0;
-
-    private shopCooldown: number = 0;
+    public rerollCost: number = 20;
+    public shopCooldown: number = 0;
+    public shopScrollOffset: number = 0;
     public hitStopTimer: number = 0;
 
     public deathPauseTimer: number = 0;
@@ -379,6 +379,23 @@ export class Game {
             const width = window.innerWidth;
             const height = window.innerHeight;
 
+            // Handle Shop Scrolling
+            if (this.waveManager.isShopOpen) {
+                if (input.scrollDeltaY !== 0) {
+                    this.shopScrollOffset -= input.scrollDeltaY * 0.5; // Scroll speed multiplier
+                    input.scrollDeltaY = 0; // Consume scroll
+                }
+
+                // Temporary bounds check (we'll refine this later based on actual content height)
+                const maxScroll = 0; // Top limit
+                // Approximate bottom limit based on 6 items (2 rows max usually)
+                const minScroll = -300; 
+
+                if (this.shopScrollOffset > maxScroll) this.shopScrollOffset = maxScroll;
+                // We'll allow a bit of overflow for now, renderer can handle the rest
+                if (this.shopScrollOffset < minScroll) this.shopScrollOffset = minScroll;
+            }
+
             if (this.waveManager.isIndexOpen) {
                 const inCloseBtn = Math.abs(mx - (width - 100)) < 80 && Math.abs(my - (height - 50)) < 25;
 
@@ -409,9 +426,11 @@ export class Game {
                     }
                 } else if (this.waveManager.isShopOpen && this.shopCooldown <= 0) {
                     const inButtonArea = Math.abs(mx - cx) < config.ui.shop.shop_button_width && Math.abs(my - config.ui.shop.shop_button_y) < config.ui.shop.shop_button_height;
+                    // The deploy button doesn't scroll
                     if (isKeyboard || inButtonArea) {
                         this.waveManager.triggerNextPhase();
                         this.shopCooldown = config.ui.shop.cooldown_after_close;
+                        this.shopScrollOffset = 0; // Reset scroll
                         input.keys['enter'] = false;
                         return;
                     }
@@ -453,7 +472,8 @@ export class Game {
                     const mx = input.mouse.x;
                     const my = input.mouse.y;
                     const cx = window.innerWidth / 2;
-                    let startY = config.ui.shop.card_start_y;
+                    // Apply scroll offset to hitboxes
+                    let startY = config.ui.shop.card_start_y + this.shopScrollOffset;
                     let cardWidth = config.ui.shop.card_width;
                     let cardHeight = config.ui.shop.card_height;
                     let spacing = config.ui.shop.card_spacing;
