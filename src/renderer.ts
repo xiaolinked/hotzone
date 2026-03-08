@@ -1,9 +1,8 @@
 import { ConfigManager } from "./config";
 import { Game } from "./game";
 import { InputManager } from "./input";
+import { Hero } from "./entities/Hero";
 
-import { RICK_ROLL_LYRICS_TIMED, RICK_ROLL_TOTAL_DURATION } from "./rickroll";
-import { AudioManager } from "./audio/AudioManager";
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -116,6 +115,65 @@ export class Renderer {
     // Draw Arena Boundary
     this.drawArenaBoundary();
 
+    // --- DRAW DYNAMIC DROP SHADOWS ---
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; // Strong shadow
+    
+    // Enemy shadows
+    for (const enemy of entities.enemies) {
+      this.ctx.beginPath();
+      // Most enemies have a radius property, we'll try to read it or estimate.
+      const r = (enemy as any).radius || 1.0;
+      this.ctx.ellipse(enemy.x, enemy.y + r * 0.8, r * 1.1, r * 0.4, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    
+    // Coin shadows
+    if (entities.coins) {
+      for (const coin of entities.coins) {
+        this.ctx.beginPath();
+        this.ctx.ellipse(coin.x, coin.y + 0.3, 0.4, 0.2, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    }
+
+    // Hero shadow
+    if (entities.hero) {
+      this.ctx.beginPath();
+      // Hero base size is roughly 1.5 scale now, so a bit larger shadow
+      this.ctx.ellipse(entities.hero.x, entities.hero.y + 0.7, 1.3, 0.5, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    
+    // Turret shadows
+    if (game.turrets) {
+        for (const turret of game.turrets) {
+            this.ctx.beginPath();
+            this.ctx.ellipse(turret.x, turret.y + 0.4, 0.8, 0.3, 0, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+    
+    // Med Turret shadows
+    if (game.medTurrets) {
+        for (const med of game.medTurrets) {
+            this.ctx.beginPath();
+            this.ctx.ellipse(med.x, med.y + 0.4, 0.8, 0.3, 0, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+
+    // Landmine shadows
+    if (game.mines) {
+        for (const mine of game.mines) {
+            this.ctx.beginPath();
+            this.ctx.ellipse(mine.x, mine.y + 0.15, 0.5, 0.2, 0, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+
+    this.ctx.restore();
+
     // Draw Entities
     for (const enemy of entities.enemies) {
       enemy.draw(this.ctx);
@@ -137,6 +195,24 @@ export class Renderer {
 
     if (entities.hero) {
       entities.hero.draw(this.ctx);
+    }
+
+    if (game.turrets) {
+      for (const turret of game.turrets) {
+        turret.draw(this.ctx);
+      }
+    }
+
+    if (game.medTurrets) {
+      for (const med of game.medTurrets) {
+        med.draw(this.ctx);
+      }
+    }
+
+    if (game.mines) {
+      for (const mine of game.mines) {
+        mine.draw(this.ctx);
+      }
     }
 
     this.drawTelegraphs(game);
@@ -218,39 +294,54 @@ export class Renderer {
     const ctx = this.ctx;
 
     ctx.save();
-    // Base Floor: Dark Blueprint Slate
-    ctx.fillStyle = "#1e293b";
+    
+    // Base Floor: Simple dark shade
+    ctx.fillStyle = "#1e2226"; 
     ctx.fillRect(-halfW, -halfH, config.arena.width, config.arena.height);
 
-    // Tech Grid (Double Line)
-    ctx.strokeStyle = "#334155";
-    ctx.lineWidth = 0.02;
-    for (let x = -halfW; x <= halfW; x += 2) {
-      ctx.beginPath();
+    // Faint, clean minimalist grid
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.lineWidth = 0.05;
+    ctx.beginPath();
+    for (let x = -halfW; x <= halfW; x += 10) {
       ctx.moveTo(x, -halfH);
       ctx.lineTo(x, halfH);
-      ctx.stroke();
     }
-    for (let y = -halfH; y <= halfH; y += 2) {
-      ctx.beginPath();
+    for (let y = -halfH; y <= halfH; y += 10) {
       ctx.moveTo(-halfW, y);
       ctx.lineTo(halfW, y);
-      ctx.stroke();
     }
+    ctx.stroke();
 
-    // Blueprint "Markers" (Crosses)
-    ctx.strokeStyle = "#475569";
-    ctx.lineWidth = 0.01;
-    for (let x = -halfW + 10; x < halfW; x += 20) {
-      for (let y = -halfH + 10; y < halfH; y += 20) {
-        ctx.beginPath();
-        ctx.moveTo(x - 0.5, y);
-        ctx.lineTo(x + 0.5, y);
-        ctx.moveTo(x, y - 0.5);
-        ctx.lineTo(x, y + 0.5);
-        ctx.stroke();
-      }
-    }
+    // Minor sector lines for framing the center
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 0.2;
+    ctx.beginPath();
+    ctx.moveTo(-halfW, 0); ctx.lineTo(halfW, 0);
+    ctx.moveTo(0, -halfH); ctx.lineTo(0, halfH);
+    ctx.stroke();
+
+    // Central Arena "Ring" marker
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Yellow and Black Warning Stripes along the very edge
+    const stripeWidth = 1.0;
+    ctx.lineWidth = stripeWidth;
+    ctx.strokeStyle = "#FFCC00";
+    
+    // Draw inset warning line
+    ctx.strokeRect(-halfW + 0.5, -halfH + 0.5, config.arena.width - 1.0, config.arena.height - 1.0);
+    
+    // Black dashes over the yellow line to make warning stripes
+    ctx.save();
+    ctx.strokeStyle = "#111111";
+    ctx.setLineDash([2, 2]); // 2 units black, 2 units gap (shows yellow)
+    ctx.strokeRect(-halfW + 0.5, -halfH + 0.5, config.arena.width - 1.0, config.arena.height - 1.0);
+    ctx.restore();
 
     ctx.restore();
   }
@@ -260,29 +351,45 @@ export class Renderer {
     const halfW = config.arena.width / 2;
     const halfH = config.arena.height / 2;
     const ctx = this.ctx;
+    const wallThickness = 2.0;
 
     ctx.save();
-    // Dual Neon Frame
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 0.4;
-    ctx.strokeRect(
-      -halfW - 0.2,
-      -halfH - 0.2,
-      config.arena.width + 0.4,
-      config.arena.height + 0.4,
-    );
+    
+    // Outer shadow (creates depth so it looks like a pit/arena)
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetX = 10;
+    ctx.shadowOffsetY = 10;
 
-    ctx.strokeStyle = "#00ffff"; // Electric Cyan
-    ctx.lineWidth = 0.1;
-    ctx.strokeRect(-halfW, -halfH, config.arena.width, config.arena.height);
+    // Outer Concrete Wall
+    ctx.fillStyle = "#1a1b1c"; // Very dark, thick concrete
+    ctx.beginPath();
+    ctx.rect(-halfW - wallThickness, -halfH - wallThickness, config.arena.width + wallThickness * 2, config.arena.height + wallThickness * 2);
+    // Hole for the arena floor
+    ctx.rect(halfW, -halfH, -config.arena.width, config.arena.height);
+    ctx.fill("evenodd");
+    
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
-    // Corner Data Clusters
-    ctx.fillStyle = "#64748b";
-    const dS = 0.5;
-    ctx.fillRect(-halfW - dS, -halfH - dS, dS * 2, dS * 2);
-    ctx.fillRect(halfW - dS, -halfH - dS, dS * 2, dS * 2);
-    ctx.fillRect(-halfW - dS, halfH - dS, dS * 2, dS * 2);
-    ctx.fillRect(halfW - dS, halfH - dS, dS * 2, dS * 2);
+    // Wall Highlights & Shadows (Bevel effect)
+    ctx.lineWidth = 0.2;
+    // Top & Left edges catch light
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.beginPath();
+    ctx.moveTo(-halfW, halfH);
+    ctx.lineTo(-halfW, -halfH);
+    ctx.lineTo(halfW, -halfH);
+    ctx.stroke();
+    
+    // Bottom & Right edges are shaded
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
+    ctx.beginPath();
+    ctx.moveTo(halfW, -halfH);
+    ctx.lineTo(halfW, halfH);
+    ctx.lineTo(-halfW, halfH);
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -335,38 +442,34 @@ export class Renderer {
   private drawParallaxStars(camX: number, camY: number) {
     const ctx = this.ctx;
     ctx.save();
-    // Digital Blueprint Particles
+    
+    // Atmospheric Dust Particles
     const layers = [
-      { speed: 0.1, color: "#334155", size: 0.8 },
-      { speed: 0.3, color: "#475569", size: 0.4 },
-      { speed: 0.5, color: "#00ffff", size: 0.2 },
+      { speed: 0.05, color: "rgba(100, 100, 100, 0.4)", size: 1.5 },
+      { speed: 0.1, color: "rgba(150, 150, 150, 0.6)", size: 1.0 },
+      { speed: 0.2, color: "rgba(200, 200, 200, 0.8)", size: 0.5 },
     ];
 
     layers.forEach((layer, lIdx) => {
       ctx.fillStyle = layer.color;
-      ctx.globalAlpha = 0.5;
 
-      // Loop through pre-gen stars and offset by camera * layer speed
+      // Loop through pre-gen stars (repurposed as dust notes)
       this.stars.forEach((star, sIdx) => {
         if (sIdx % layers.length !== lIdx) return;
 
-        // Drift + Heat Haze Wave
-        const drift = Date.now() * 0.001 * layer.speed;
-        const wave = Math.sin(Date.now() * 0.002 + star.x) * 10;
+        // Slow organic drift
+        const driftX = Math.sin(Date.now() * 0.0005 + star.y) * 20;
+        const driftY = Date.now() * 0.001 * layer.speed * 50;
 
-        let sx = (star.x - camX * layer.speed * 20 + drift * 50) % this.width;
-        let sy = (star.y - camY * layer.speed * 20 + wave) % this.height;
+        let sx = (star.x - camX * layer.speed * 15 + driftX) % this.width;
+        let sy = (star.y - camY * layer.speed * 15 + driftY) % this.height;
         if (sx < 0) sx += this.width;
         if (sy < 0) sy += this.height;
 
-        // Draw digital dash instead of circle
-        const dashLen = star.r * layer.size * 6;
-        ctx.fillRect(sx, sy, 1, dashLen);
-
-        // Ember glow (Linear)
-        if (layer.speed > 0.3) {
-          ctx.fillRect(sx, sy, 1, dashLen);
-        }
+        // Draw soft dusty circle
+        ctx.beginPath();
+        ctx.arc(sx, sy, star.r * layer.size, 0, Math.PI * 2);
+        ctx.fill();
       });
     });
     ctx.restore();
@@ -466,43 +569,59 @@ export class Renderer {
       }
     }
 
-    // 0. Top Left HUD Plate
+    // 0. Top Left HUD Plate (Premium Glassmorphism)
     ctx.save();
     ctx.textAlign = "left";
 
     const input = InputManager.getInstance();
+    
+    // Create a smooth, dark gradient for the HUD background
+    const hudWidth = input.isTouchDevice ? 170 : 240;
+    const hudHeight = input.isTouchDevice ? 65 : 85;
+    const hudGrad = ctx.createLinearGradient(10, 10, 10, 10 + hudHeight);
+    hudGrad.addColorStop(0, "rgba(20, 25, 35, 0.85)");
+    hudGrad.addColorStop(1, "rgba(10, 12, 18, 0.95)");
+
+    ctx.fillStyle = hudGrad;
+    ctx.beginPath();
+    ctx.roundRect(10, 10, hudWidth, hudHeight, 12);
+    ctx.fill();
+    
+    // Add a glowing neon border to the HUD
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "rgba(0, 255, 255, 0.4)";
+    ctx.strokeStyle = "rgba(0, 255, 255, 0.6)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.shadowBlur = 0; // Reset shadow for text
+
     if (input.isTouchDevice) {
-      // Mobile HUD: Smaller and tighter
-      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-      ctx.beginPath();
-      ctx.roundRect(10, 10, 160, 60, 8);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255, 123, 0, 0.3)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      // Mobile HUD
+      ctx.font = "bold 15px 'Inter', sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(`SCORE: ${game.score.toLocaleString()}`, 25, 35);
 
-      ctx.font = "bold 14px monospace";
-      ctx.fillStyle = "#FFF";
-      ctx.fillText(`SCORE: ${game.score.toLocaleString()}`, 20, 32);
-
+      ctx.font = "bold 14px 'Inter', sans-serif";
       ctx.fillStyle = "#FFD700";
-      ctx.fillText(`COINS: ${game.coinCount}`, 20, 54);
+      ctx.fillText(`COINS: ${game.coinCount}`, 25, 58);
     } else {
       // Desktop HUD
-      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-      ctx.beginPath();
-      ctx.roundRect(10, 10, 220, 80, 10);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255, 123, 0, 0.3)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.font = "bold 20px 'Inter', sans-serif";
+      
+      // Score with slight drop shadow for readability
+      ctx.shadowColor = "#000";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(`SCORE: ${game.score.toLocaleString()}`, 30, 42);
 
-      ctx.font = "bold 18px monospace";
-      ctx.fillStyle = "#FFF";
-      ctx.fillText(`SCORE: ${game.score.toLocaleString()}`, 25, 41);
-
+      // Coins in Gold
+      ctx.font = "bold 18px 'Inter', sans-serif";
       ctx.fillStyle = "#FFD700";
-      ctx.fillText(`COINS: ${game.coinCount}`, 25, 70);
+      ctx.fillText(`COINS: ${game.coinCount}`, 30, 72);
+      ctx.restore(); // Custom restore to clear shadows from HUD block
+      ctx.save();
     }
     ctx.restore();
 
@@ -517,16 +636,18 @@ export class Renderer {
     }
 
     ctx.textAlign = "center";
-    ctx.font = "bold 30px monospace";
+    ctx.font = "bold 34px 'Inter', sans-serif"; // Better font
 
     if (waveMgr.isWaveActive) {
-      ctx.fillStyle = "#FFFFFF";
-      if (waveMgr.stateTimer <= 5) ctx.fillStyle = "#FF0000";
-      ctx.fillText(waveMgr.stateTimer.toFixed(1), centerX, 40);
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = waveMgr.stateTimer <= 5 ? "#FF0000" : "#00FFFF";
+      ctx.fillStyle = waveMgr.stateTimer <= 5 ? "#FF4444" : "#FFFFFF";
+      ctx.fillText(waveMgr.stateTimer.toFixed(1), centerX, 50);
+      ctx.shadowBlur = 0;
 
-      ctx.font = "20px sans-serif";
-      ctx.fillStyle = "#AAAAAA";
-      ctx.fillText(`WAVE ${waveMgr.currentWave}`, centerX, 70);
+      ctx.font = "bold 22px 'Inter', sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.fillText(`WAVE ${waveMgr.currentWave}`, centerX, 80);
     } else if (waveMgr.isWaveComplete) {
       ctx.save();
       ctx.shadowBlur = 30;
@@ -571,21 +692,55 @@ export class Renderer {
         "#FFD84D",
       );
 
+      // --- COLOR CUSTOMIZATION SWATCHES ---
+      const colors = ['#FF3333', '#3388FF', '#33FF55', '#FFCC00', '#B833FF'];
+      const swatchSize = 40;
+      const swatchGap = 15;
+      const totalWidth = (colors.length * swatchSize) + ((colors.length - 1) * swatchGap);
+      const startX = centerX - totalWidth / 2;
+      const swatchY = startBtnY + 140;
+
+      ctx.save();
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#AAA";
+      ctx.fillText("SELECT HAT COLOR", centerX, swatchY - 15);
+
+      colors.forEach((c, i) => {
+          const x = startX + i * (swatchSize + swatchGap);
+          
+          // Selection Highlight
+          if (c === Hero.defaultHatColor) {
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = "#FFF";
+              ctx.strokeRect(x - 3, swatchY - 3, swatchSize + 6, swatchSize + 6);
+          }
+
+          ctx.fillStyle = c;
+          ctx.fillRect(x, swatchY, swatchSize, swatchSize);
+          
+          // Inner shadow for depth
+          ctx.strokeStyle = "rgba(0,0,0,0.5)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, swatchY, swatchSize, swatchSize);
+      });
+      ctx.restore();
+
+
       const input = InputManager.getInstance();
       ctx.font = "20px sans-serif";
-      ctx.fillStyle = "#AAA";
+      ctx.fillStyle = "#666"; // Dimmed slightly to make room for swatches
       if (input.isTouchDevice) {
         ctx.fillText(
           "Touch Left Side to Move, Right Side to Aim",
           centerX,
-          startBtnY + 140,
+          swatchY + 70,
         );
-        ctx.fillText("Tap Buttons for Actions", centerX, startBtnY + 170);
+        ctx.fillText("Tap Buttons for Actions", centerX, swatchY + 100);
       } else {
         ctx.fillText(
           "WASD/Arrows to Move, Mouse to Aim",
           centerX,
-          startBtnY + 140,
+          swatchY + 70,
         );
       }
     } else if (waveMgr.isIndexOpen) {
@@ -676,20 +831,28 @@ export class Renderer {
         ctx.save();
         ctx.translate(0, hoverOffset);
 
-        // Card Base (Glassmorphism)
+        // Card Base (Premium Glassmorphism)
         const cardGrad = ctx.createLinearGradient(x, y, x, y + cardHeight);
-        cardGrad.addColorStop(0, "rgba(40, 40, 45, 0.95)");
-        cardGrad.addColorStop(1, "rgba(20, 20, 25, 0.98)");
+        if (isHovered) {
+          cardGrad.addColorStop(0, "rgba(50, 50, 60, 0.95)");
+          cardGrad.addColorStop(1, "rgba(25, 25, 35, 0.98)");
+        } else {
+          cardGrad.addColorStop(0, "rgba(30, 30, 35, 0.9)");
+          cardGrad.addColorStop(1, "rgba(15, 15, 20, 0.95)");
+        }
 
         ctx.fillStyle = cardGrad;
         ctx.beginPath();
-        ctx.roundRect(x, y, cardWidth, cardHeight, 15);
+        ctx.roundRect(x, y, cardWidth, cardHeight, 16);
         ctx.fill();
 
-        // Card Border
-        ctx.strokeStyle = isHovered ? "#FF7B00" : "rgba(255, 255, 255, 0.1)";
-        ctx.lineWidth = isHovered ? 3 : 1;
+        // Glowing Card Border
+        ctx.shadowBlur = isHovered ? 15 : 0;
+        ctx.shadowColor = isHovered ? "rgba(0, 255, 255, 0.5)" : "transparent";
+        ctx.strokeStyle = isHovered ? "#00FFFF" : "rgba(255, 255, 255, 0.15)";
+        ctx.lineWidth = isHovered ? 2 : 1;
         ctx.stroke();
+        ctx.shadowBlur = 0; // Reset shadow for contents
 
         // 3. Upgrade Icon (Simplified Vector)
         ctx.save();
@@ -829,61 +992,16 @@ export class Renderer {
     // We set deathPauseTimer to 3.0 on death.
     // Let's say we want to show the overlay when timer < 1.5 (so 1.5s delay)
 
-    const showOverlay =
-      (game.hero.isDead || game.hero.isDying) &&
-      (game.isRickRolled ? game.deathPauseTimer <= 1.5 : true);
+    const showOverlay = (game.hero.isDead || game.hero.isDying);
 
     if (showOverlay) {
       const alpha = 1.0;
       ctx.save();
       ctx.globalAlpha = alpha;
 
-      // No black background fill
-      // ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-      // ctx.fillRect(0, 0, width, height);
-
-      if (game.isRickRolled) {
-        const rickGif = document.getElementById("rick-gif");
-        const rickLyrics = document.getElementById("rick-lyrics");
-        if (rickGif) {
-          if (!rickGif.getAttribute("src")) {
-            rickGif.setAttribute("src", "/rick.gif");
-          }
-          rickGif.style.display = "block";
-        }
-
-        if (rickLyrics) {
-          rickLyrics.style.display = "block";
-          // Sync lyrics to music using elapsed time from AudioManager
-          if (AudioManager.rickRollStartTime > 0) {
-            const elapsed =
-              (Date.now() - AudioManager.rickRollStartTime) / 1000;
-            const loopIndex = Math.floor(elapsed / RICK_ROLL_TOTAL_DURATION);
-            const timeInLoop = elapsed % RICK_ROLL_TOTAL_DURATION;
-            const setIndex = loopIndex % RICK_ROLL_LYRICS_TIMED.length;
-            const set = RICK_ROLL_LYRICS_TIMED[setIndex];
-            // Find current phrase: last cue whose time <= timeInLoop
-            let currentLyric = set[0].text;
-            for (const cue of set) {
-              if (timeInLoop >= cue.time) currentLyric = cue.text;
-            }
-            rickLyrics.innerText = currentLyric;
-          }
-        }
-      }
-      // Removed "GAME OVER" text else block
-
       // Lowered Button (height/2 + 150)
       this.drawButton(centerX, height / 2 + 150, 220, 60, "RESTART", "#FFFFFF");
       ctx.restore();
-    } else {
-      const rickGif = document.getElementById("rick-gif");
-      const rickLyrics = document.getElementById("rick-lyrics");
-      if (rickGif) {
-        rickGif.style.display = "none";
-        rickGif.removeAttribute("src");
-      }
-      if (rickLyrics) rickLyrics.style.display = "none";
     }
 
     this.drawPermanentStatsBar(game);
@@ -1096,6 +1214,33 @@ export class Renderer {
         ctx.fillStyle = stat.color;
         ctx.fillText(stat.value.toString(), x + barWidth - 15, currentY);
       });
+
+      // --- ACTIVE ITEMS COUNTER ---
+      if (!input.isTouchDevice) {
+        const itemCount = (game.turrets?.length ?? 0) + (game.medTurrets?.length ?? 0) + (game.mines?.length ?? 0);
+        if (itemCount > 0) {
+          const itemY = y + barHeight + 10;
+          ctx.fillStyle = "rgba(0,0,0,0.75)";
+          ctx.beginPath();
+          ctx.roundRect(x, itemY, barWidth, 40, 8);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(68, 136, 255, 0.5)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.textAlign = "left";
+          ctx.fillStyle = "#4488FF";
+          ctx.font = "bold 11px monospace";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🔫 ACTIVE ITEMS", x + 12, itemY + 12);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.font = "12px monospace";
+          const turretCount = game.turrets?.length ?? 0;
+          const medCount = game.medTurrets?.length ?? 0;
+          const mineCount = game.mines?.length ?? 0;
+          ctx.fillText(`${turretCount}🔫  ${medCount}❤  ${mineCount}💣`, x + 12, itemY + 28);
+        }
+      }
     }
 
     ctx.restore();
@@ -1211,6 +1356,7 @@ export class Renderer {
     const ctx = this.ctx;
     const telegraphs = game.waveManager.activeTelegraphs;
 
+    // --- Enemy Spawn X (Red) ---
     for (const t of telegraphs) {
       ctx.save();
       ctx.translate(t.x, t.y);
@@ -1232,6 +1378,54 @@ export class Renderer {
       ctx.arc(0, 0, size, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+
+    // --- Item Spawn X (Blue) ---
+    const itemTelegraphs = game.waveManager.activeItemTelegraphs;
+    if (itemTelegraphs) {
+      for (const t of itemTelegraphs) {
+        ctx.save();
+        ctx.translate(t.x, t.y);
+
+        // Spin and pulse
+        const elapsed = (t.maxTimer - t.timer) / t.maxTimer;
+        const spin = elapsed * Math.PI * 4;
+        ctx.rotate(spin);
+
+        const pulse = 0.8 + Math.sin(Date.now() * 0.02) * 0.2;
+        ctx.scale(pulse, pulse);
+
+        // Glowing background circle
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = t.type === 'med_turret' ? '#00FF88' : (t.type === 'mine' ? '#FFAA00' : '#4488FF');
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // X stroke
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = t.type === 'med_turret' ? '#00FF88' : (t.type === 'mine' ? '#FFAA00' : '#4488FF');
+        ctx.lineWidth = 0.5;
+        ctx.lineCap = 'round';
+        const s = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-s, -s); ctx.lineTo(s, s);
+        ctx.moveTo(s, -s);  ctx.lineTo(-s, s);
+        ctx.stroke();
+
+        // Label
+        ctx.scale(1 / this.pixelsPerUnit, 1 / this.pixelsPerUnit);
+        ctx.rotate(-spin); // Counter-rotate so text stays upright
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          t.type === 'turret' ? '🔫' : t.type === 'med_turret' ? '❤' : '💣',
+          0, -35
+        );
+
+        ctx.restore();
+      }
     }
   }
 

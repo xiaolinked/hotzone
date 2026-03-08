@@ -7,9 +7,10 @@ export class Bullet extends Entity {
     public damage: number;
     private maxLifetime: number; // Range / Speed
     private lifetime: number = 0;
-    private angle: number = 0;
+    public angle: number = 0;
     public isCrit: boolean = false;
     public weaponType: string = 'pistol';
+    public isHealing: boolean = false;
 
     constructor(x: number, y: number, targetX: number, targetY: number, critChance: number = 0, weaponType: string = 'pistol', weaponDamage?: number, weaponSpeed?: number, weaponRange?: number) {
         super(x, y);
@@ -60,13 +61,28 @@ export class Bullet extends Entity {
             return;
         }
 
-        // Collision with Enemies
+        // Collision Check
         const collRadius = (this.weaponType === 'shotgun' ? 0.08 : 0.12);
-        for (const enemy of game.enemies) {
-            if (this.distanceTo(enemy) < (collRadius + enemy.getCollisionRadius())) {
-                enemy.takeDamage(this.damage, true);
+        
+        if (this.isHealing) {
+            // Check collision with Hero
+            if (this.distanceTo(game.hero) < (collRadius + game.hero.radius)) {
+                // Heal the hero (negative damage is passed, or just use absolute value)
+                const healAmt = Math.abs(this.damage);
+                game.hero.hp = Math.min(game.hero.maxHp, game.hero.hp + healAmt);
+                // Maybe a small green combo text
+                game.addComboText(`+${healAmt}`, game.hero.x, game.hero.y - 1);
                 this.isDead = true;
                 return;
+            }
+        } else {
+            // Collision with Enemies
+            for (const enemy of game.enemies) {
+                if (this.distanceTo(enemy) < (collRadius + enemy.getCollisionRadius())) {
+                    enemy.takeDamage(this.damage, true);
+                    this.isDead = true;
+                    return;
+                }
             }
         }
     }
@@ -99,7 +115,12 @@ export class Bullet extends Entity {
         ctx.shadowColor = glow;
 
         const grad = ctx.createRadialGradient(-0.1, -0.1, 0, 0, 0, 0.5);
-        if (this.isCrit) {
+        if (this.isHealing) {
+            grad.addColorStop(0, '#E0FFE0');
+            grad.addColorStop(0.4, '#00FF00');
+            grad.addColorStop(1, '#008800');
+            ctx.shadowColor = 'rgba(0, 255, 0, 0.4)';
+        } else if (this.isCrit) {
             grad.addColorStop(0, '#FFF');
             grad.addColorStop(0.4, '#00FFFF');
             grad.addColorStop(1, '#0088AA');

@@ -249,6 +249,24 @@
                 "name": "Rifle",
                 "description": "High DMG, long range",
                 "cost": 150
+            },
+            {
+                "type": "turret",
+                "name": "Auto-Turret",
+                "description": "Deploys a stationary\nturret to fight",
+                "cost": 10
+            },
+            {
+                "type": "med_turret",
+                "name": "Med-Turret",
+                "description": "Deploys a turret\nthat heals you",
+                "cost": 10
+            },
+            {
+                "type": "mines",
+                "name": "Landmines",
+                "description": "Drops 3 explosive\nmines next wave",
+                "cost": 5
             }
         ]
     },

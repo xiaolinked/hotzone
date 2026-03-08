@@ -214,9 +214,14 @@ export class Enemy extends Entity {
         ctx.stroke();
         ctx.restore();
 
-        // Filled body (semi-transparent)
-        ctx.fillStyle = mainColor;
-        ctx.globalAlpha = this.opacity * 0.3;
+        // Filled body (semi-transparent 3D gradient)
+        const grd = ctx.createRadialGradient(-r * 0.1, -r * 0.1, r * 0.1, 0, 0, r);
+        grd.addColorStop(0, '#FFFFFF'); // Bright center highlight
+        grd.addColorStop(0.3, mainColor); // Base color
+        grd.addColorStop(1, '#000000'); // Dark edge
+
+        ctx.fillStyle = grd;
+        ctx.globalAlpha = this.opacity * 0.8; // Increased opacity slightly for the 3D effect to show
         ctx.beginPath();
         ctx.moveTo(r, 0);
         ctx.lineTo(-r * 0.6, -r * 0.7);

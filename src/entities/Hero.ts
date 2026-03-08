@@ -38,6 +38,10 @@ export class Hero extends Entity {
     // Weapon system
     public currentWeapon: string = 'pistol';
     public ownedWeapons: string[] = ['pistol']; 
+    
+    // Cosmetics
+    public static defaultHatColor: string = '#FF3333';
+    public hatColor: string = Hero.defaultHatColor; // Assigned from default
 
     private recoilVelocity: { x: number, y: number } = { x: 0, y: 0 };
     public weaponDamage: number = 10;
@@ -96,6 +100,7 @@ export class Hero extends Entity {
         this.multishot = config.blaster.multishot_count;
 
         this.color = '#0088FF'; // Blue
+        this.hatColor = Hero.defaultHatColor; // Apply global choice on instantiate
     }
 
 
@@ -454,35 +459,76 @@ export class Hero extends Entity {
         // --- DRAW BROTATO-STYLE PROCEDURAL BODY ---
         ctx.save();
         
-        let shouldFlip = false;
-        // Determine whether to face left or right based on the aim direction, NOT movement!
-        if (Math.abs(aimAngle) > Math.PI / 2) {
-            shouldFlip = true;
-        }
+        // Update 4-way facing based on movement.
+        // This prevents snapping when moving purely diagonally or stopping.
+        if (this.isWalking) {
+            // Get angle in degrees for easier cardinal direction slicing
+            let deg = (this.lastMoveAngle * 180) / Math.PI;
+            if (deg < 0) deg += 360; // Normalize to 0-360
 
-        // Only lean (rotate slightly) if actively walking
+            // Slices: 
+            // Right: 315-360, 0-45
+            // Down: 45-135 
+            // Left: 135-225
+            // Up: 225-315
+            
+            // Adjust slices to give horizontal movement slightly more priority over pure vertical 
+            // to make diagonal aiming feel more natural
+            if (deg >= 55 && deg < 125) {
+                (this as any).facingDir = 'DOWN';
+            } else if (deg >= 125 && deg < 235) {
+                (this as any).facingDir = 'LEFT';
+            } else if (deg >= 235 && deg < 305) {
+                (this as any).facingDir = 'UP';
+            } else {
+                (this as any).facingDir = 'RIGHT';
+            }
+        }
+        
+        const facing = (this as any).facingDir || 'RIGHT';
+
+        // Only lean (rotate slightly) if actively walking horizontally
         let leanAngle = 0;
         if (this.isWalking) {
-             // 0.2 radians is a nice subtle leaning forward stance
-             leanAngle = 0.2; 
+             if (facing === 'RIGHT' || facing === 'LEFT') {
+                 leanAngle = 0.2; 
+             }
         }
 
-        if (shouldFlip) {
+        if (facing === 'LEFT') {
             ctx.scale(-1, 1);
         }
         ctx.rotate(leanAngle);
 
         // Subtly bob up and down while walking
         const bob = this.isWalking ? Math.abs(Math.sin(this.walkTimer)) * 0.1 : 0;
-        ctx.translate( bob, 0);
+        ctx.translate(0, bob);
         
-        // We will draw facing "Right" (0 angle), since rotation handles the direction.
-        // Scale him up so he's nice and chunky as requested
+        // --- Z-SORTING WEAPON ---
+        // If facing UP, draw the weapon BEFORE the body so it appears behind the hero.
+        const isWeaponBehind = facing === 'UP';
+
+        if (isWeaponBehind) {
+            ctx.save();
+            ctx.translate(0, -bob); // Undo bob for weapon orbit stability
+            ctx.rotate(-leanAngle); // Undo lean
+            if (facing === 'LEFT') ctx.scale(-1, 1); // Undo facing flip
+            this.drawWeapon(ctx, aimAngle);
+            ctx.restore();
+        }
+
+        // --- DRAW BODY ---    // Scale him up so he's nice and chunky as requested
         ctx.scale(1.5, 1.5);
 
+        // Create a 3D spherical/pillowed radial gradient for the body
+        const bodyGrd = ctx.createRadialGradient(0, -0.4, 0.05, 0, -0.2, 0.5);
+        bodyGrd.addColorStop(0, '#ff7a7a'); // Lighter highlight towards top left
+        bodyGrd.addColorStop(0.6, '#FF3333');  // Base red
+        bodyGrd.addColorStop(1, '#990000'); // Darker shadow at the edges
+
         // Body / Shirt (Red)
-        ctx.fillStyle = '#FF3333';
-        ctx.strokeStyle = '#000';
+        ctx.fillStyle = bodyGrd;
+        ctx.strokeStyle = '#220000';
         ctx.lineWidth = 0.05;
         ctx.beginPath();
         ctx.roundRect(-0.2, -0.25, 0.4, 0.5, 0.1);
@@ -491,18 +537,24 @@ export class Hero extends Entity {
         // Tiny feet underneath
         ctx.fillStyle = '#222';
         const walkCycle = this.isWalking ? Math.sin(this.walkTimer * 1.5) : 0;
+        
+        // Adjust feet animation slightly if walking UP/DOWN (simulate waddling instead of striding)
+        const footCycleL = (facing === 'UP' || facing === 'DOWN') ? Math.abs(walkCycle) * 0.5 : walkCycle * 0.5;
+        const footCycleR = (facing === 'UP' || facing === 'DOWN') ? Math.abs(-walkCycle) * 0.5 : -walkCycle * 0.5;
+
         // Left foot
         ctx.save();
         ctx.translate(-0.1, 0.2);
-        ctx.rotate(walkCycle * 0.5);
+        ctx.rotate(footCycleL);
         ctx.beginPath();
         ctx.roundRect(-0.1, 0, 0.2, 0.15, 0.05);
         ctx.fill(); ctx.stroke();
         ctx.restore();
+        
         // Right foot
         ctx.save();
         ctx.translate(0.1, 0.2);
-        ctx.rotate(-walkCycle * 0.5);
+        ctx.rotate(footCycleR);
         ctx.beginPath();
         ctx.roundRect(-0.1, 0, 0.2, 0.15, 0.05);
         ctx.fill(); ctx.stroke();
@@ -514,50 +566,117 @@ export class Hero extends Entity {
         ctx.ellipse(0, -0.3, 0.35, 0.45, 0, 0, Math.PI * 2);
         ctx.fill(); ctx.stroke();
 
-        // Sweatband (Blue)
-        ctx.fillStyle = '#3388FF';
-        ctx.beginPath();
-        // Curve it slightly around the head
-        ctx.ellipse(0, -0.45, 0.34, 0.1, 0, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-
-        // Face - Eyes track aim direction
-        // Calculate eye offset based on aim
-        const maxEyeOffset = 0.08;
-        let eyeOffsetX = Math.cos(aimAngle) * maxEyeOffset;
-        let eyeOffsetY = Math.sin(aimAngle) * maxEyeOffset;
-        
-        if (shouldFlip) {
-            eyeOffsetX *= -1; // Invert local X so eyes track correctly when the canvas is flipped horizontally
-        }
-
+        // --- DRAW HAT ---
         ctx.save();
-        ctx.translate(eyeOffsetX, eyeOffsetY);
-
-        // Angry Eyes
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = this.hatColor; // Customizable!
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.03;
         
-        // Left Eye Shape (angry slant)
-        ctx.beginPath();
-        ctx.moveTo(0.15, -0.35); // outer
-        ctx.lineTo(0.25, -0.4);  // inner top
-        ctx.lineTo(0.25, -0.3);  // inner bottom
-        ctx.fill();
-        
-        // Right Eye Shape
-        ctx.beginPath();
-        ctx.moveTo(0.15, -0.15); // outer
-        ctx.lineTo(0.25, -0.1);  // inner top
-        ctx.lineTo(0.25, -0.2);  // inner bottom
-        ctx.fill();
+        let hatOffset = 0;
+        if (facing === 'RIGHT' || facing === 'LEFT') hatOffset = 0.05;
 
-        ctx.restore(); // Undo eye tracking translation
+        // Hat dome
+        ctx.beginPath();
+        ctx.arc(0 + hatOffset, -0.65, 0.25, Math.PI, 0); // half circle on top
+        ctx.fill(); ctx.stroke();
+        
+        // Hat Brim
+        if (facing !== 'UP') {
+            ctx.beginPath();
+            if (facing === 'RIGHT' || facing === 'LEFT') {
+                // Bill facing forward (left is flipped earlier so local forward is right)
+                ctx.roundRect(-0.15 + hatOffset, -0.68, 0.55, 0.08, 0.04);
+            } else if (facing === 'DOWN') {
+                // Forward facing brim, narrower horizontally than the main head
+                ctx.roundRect(-0.25, -0.65, 0.5, 0.06, 0.03);
+            }
+            ctx.fill(); ctx.stroke();
+        }
+        ctx.restore();
+
+        // --- FACE & EYES ---
+        // Only draw face if NOT facing away from the camera (UP)
+        if (facing !== 'UP') {
+            
+            // Base White Eyes (Locked to head, side-by-side horizontally)
+            ctx.fillStyle = '#FFF';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 0.02;
+            
+            // Eye Y coordinate (Higher up on the face)
+            const eyeY = -0.35;
+            // Eye X offset from center
+            let eyeSpread = 0.14; 
+            
+            // If facing down, shift eyes to be centered on the face.
+            // If facing right (or flipped left), shift eyes forward so they are on the edge of the face.
+            let faceOffsetX = 0;
+            if (facing === 'RIGHT' || facing === 'LEFT') {
+                 faceOffsetX = 0.18; // Shift eyes forward in profile
+                 eyeSpread = 0.12;  // Bring them closer together in profile
+            }
+
+            // Calculate white eye offset based on aim (moves less than pupil)
+            const maxEyeOffset = 0.02;
+            let eyeOffsetX = Math.cos(aimAngle) * maxEyeOffset;
+            let eyeOffsetY = Math.sin(aimAngle) * maxEyeOffset;
+            
+            if (facing === 'LEFT') {
+                eyeOffsetX *= -1; // Invert local X for flipped canvas
+            }
+            
+            // Apply slight tilt to eyes if looking far up/down
+            const lookTilt = Math.sin(aimAngle) * 0.1;
+
+            ctx.save();
+            ctx.translate(eyeOffsetX, eyeOffsetY);
+            ctx.rotate(lookTilt);
+
+            // Left Eye Base
+            ctx.beginPath();
+            ctx.ellipse(faceOffsetX - eyeSpread, eyeY, 0.09, 0.14, 0, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+            
+            // Right Eye Base
+            ctx.beginPath();
+            ctx.ellipse(faceOffsetX + eyeSpread, eyeY, 0.09, 0.14, 0, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+            
+            // Calculate pupil offset based on aim
+            const maxPupilOffset = 0.05; // Pupils move around inside the eye (slightly more now)
+            let pupilOffsetX = Math.cos(aimAngle) * maxPupilOffset;
+            let pupilOffsetY = Math.sin(aimAngle) * maxPupilOffset;
+            
+            if (facing === 'LEFT') {
+                pupilOffsetX *= -1; // Invert local X so pupils track aim when canvas is flipped
+            }
+
+            ctx.save();
+            ctx.translate(pupilOffsetX, pupilOffsetY);
+
+            // Black Pupils (Move to track aim)
+            ctx.fillStyle = '#000';
+            
+            // Left Pupil
+            ctx.beginPath();
+            ctx.arc(faceOffsetX - eyeSpread, eyeY, 0.055, 0, Math.PI * 2); // slightly bigger pupils
+            ctx.fill();
+            
+            // Right Pupil
+            ctx.beginPath();
+            ctx.arc(faceOffsetX + eyeSpread, eyeY, 0.055, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore(); // Undo pupil tracking translation
+            ctx.restore(); // Undo white eye translation/rotation
+        }
         
         ctx.restore(); // Undo body rotation and bob
 
-        // --- RENDER WEAPON SEPARATELY ---
-
-        this.drawWeapon(ctx, aimAngle);
+        // --- RENDER WEAPON SEPARATELY (If aiming DOWN/FORWARD) ---
+        if (!isWeaponBehind) {
+            this.drawWeapon(ctx, aimAngle);
+        }
 
         ctx.restore(); // End Main Transform (this.x, this.y)
     }
@@ -566,7 +685,7 @@ export class Hero extends Entity {
         ctx.save();
         
         // Push the weapon out from the center slightly so it orbits the hero
-        const weaponOrbitDistance = 0.4;
+        const weaponOrbitDistance = 0.45; // Slightly pushed out for hand clearance
         ctx.translate(Math.cos(aimAngle) * weaponOrbitDistance, Math.sin(aimAngle) * weaponOrbitDistance);
         ctx.rotate(aimAngle);
 
@@ -576,8 +695,6 @@ export class Hero extends Entity {
             ctx.scale(1, -1);
         }
 
-        const gunImg = (window as any).__GUN_IMG;
-        
         // Weapon size scale
         let scaleX = 2.0;
         let scaleY = 2.0;
@@ -592,30 +709,169 @@ export class Hero extends Entity {
             scaleX = 2.0; scaleY = 2.0; // Pistol baseline
         }
 
-        // Apply visual kick to the weapon explicitly!
-        // We will pull the weapon back significantly based on the recent firing of a shot.
-        const vKick = this.fireTimer > 0 ? (this.fireTimer / this.weaponFireRate) * 0.25 * scaleX : 0; // Downplay from 0.4
+        // // Apply visual kick directly 
+        const kickRatio = this.fireTimer / this.weaponFireRate;
+        // Smoother, less drastic recoil curve (pow 3 instead of 8)
+        const kickPower = Math.pow(kickRatio, 3); 
+        
+        // Muzzle flip: Gun rotates up moderately
+        const flipAngle = kickPower * -0.2; // Reduced from -0.5
+        ctx.rotate(flipAngle);
+        
+        // Backward kick: Gun pushes back into the hand gently
+        const vKick = kickPower * 0.25 * scaleX; // Reduced from 0.45
         ctx.translate(-vKick, 0);
+        ctx.save();
+        ctx.scale(scaleX, scaleY);
+        
+        // --- DRAW WEAPON (VECTOR) ---
+        // Offset so the back hand holds the primary grip
+        ctx.translate(-0.15, -0.05);
 
-        if (gunImg && gunImg.width > 0) {
-            ctx.save();
-            ctx.scale(scaleX, scaleY);
-            // The AI image is 16x10 roughly. 
-            // We want it to be roughly 1.3 units long in game space for a pistol.
-            // (1.3 / 16) is the scale factor we need.
-            const drawW = 0.6;
-            const drawH = drawW * (gunImg.height / gunImg.width);
-            
-            // Offset it so the grip is roughly at the rotation origin
-            ctx.drawImage(gunImg, -drawW * 0.2, -drawH * 0.4, drawW, drawH);
+        // Slide flex / firing animation common values
+        const slideFlex = this.fireTimer > 0 ? kickRatio * 0.05 : 0;
+        const slideKick = this.fireTimer > 0 ? kickRatio * 0.15 : 0;
+        const triggerPull = this.fireTimer > 0 ? 0.02 : 0; 
+
+        if (this.currentWeapon === 'pistol') {
+            const gripW = 0.12; const gripH = 0.28;
+            const slideW = 0.45 - slideFlex; const slideH = 0.14;
+
+            // Grip
+            ctx.fillStyle = '#1A1C1E'; ctx.strokeStyle = '#0B0C0D'; ctx.lineWidth = 0.015;
+            ctx.save(); ctx.translate(0, slideH * 0.5); ctx.rotate(0.15);
+            ctx.beginPath(); ctx.roundRect(-gripW/2, 0, gripW, gripH, [0.02, 0.02, 0.05, 0.05]); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#2A2C2E';
+            for(let i=0; i<4; i++) ctx.fillRect(-gripW/2 + 0.02 + i*0.02, 0.05, 0.01, gripH - 0.1);
             ctx.restore();
-        } else {
-             // Fallback minimal gun if image fails to load
-             ctx.fillStyle = '#222';
-             ctx.beginPath();
-             ctx.roundRect(-0.1, -0.1, 0.4 * scaleX, 0.18 * scaleY, 0.02);
-             ctx.fill();
+
+            // Trigger Guard & Cutout
+            ctx.fillStyle = '#1A1C1E';
+            ctx.beginPath(); ctx.roundRect(0.06, slideH * 0.5, 0.14, 0.08, 0.04); ctx.fill(); ctx.stroke();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath(); ctx.roundRect(0.08, slideH * 0.5 + 0.02, 0.08, 0.04, 0.01); ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Trigger
+            ctx.strokeStyle = '#555'; ctx.lineWidth = 0.015;
+            ctx.beginPath(); ctx.moveTo(0.1 + triggerPull, slideH * 0.5 + 0.02); ctx.lineTo(0.12 + triggerPull, slideH * 0.5 + 0.05); ctx.stroke();
+
+            // Slide
+            ctx.save(); ctx.translate(-0.05 - slideKick, -slideH/2);
+            ctx.fillStyle = '#222529'; ctx.strokeStyle = '#050505';
+            ctx.beginPath(); ctx.roundRect(0, 0, slideW, slideH, [0.03, 0.03, 0.01, 0.01]); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = '#111'; ctx.lineWidth = 0.01;
+            for(let i=0; i<5; i++) { ctx.beginPath(); ctx.moveTo(0.05 + i*0.015, 0.02); ctx.lineTo(0.05 + i*0.015, slideH - 0.02); ctx.stroke(); }
+            for(let i=0; i<3; i++) { ctx.beginPath(); ctx.moveTo(slideW - 0.08 - i*0.015, 0.02); ctx.lineTo(slideW - 0.08 - i*0.015, slideH - 0.02); ctx.stroke(); }
+            ctx.fillStyle = '#777'; ctx.fillRect(slideW * 0.5, 0.02, 0.08, 0.03); // Port
+            ctx.fillStyle = '#111'; ctx.fillRect(0.02, -0.02, 0.03, 0.02); ctx.fillRect(slideW - 0.04, -0.02, 0.02, 0.02); // Sights
+            ctx.fillStyle = '#888'; ctx.fillRect(slideW, 0.04, 0.02, 0.06); // Barrel Let
+            ctx.restore();
+
+            // Hands (Pistol)
+            ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
+            ctx.beginPath(); ctx.arc(0.02, slideH * 0.5 + 0.05, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back
+            ctx.beginPath(); ctx.arc(0.18, slideH * 0.5 + 0.03, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front
+        } 
+        else if (this.currentWeapon === 'smg') {
+            // SMG: Compact, boxy, extended mag (like a MAC-10)
+            const bodyW = 0.35; const bodyH = 0.16;
+            
+            // Grip
+            ctx.fillStyle = '#111'; ctx.strokeStyle = '#000'; ctx.lineWidth = 0.015;
+            ctx.beginPath(); ctx.roundRect(-0.04, bodyH/2, 0.1, 0.25, 0.02); ctx.fill(); ctx.stroke();
+            
+            // Extended Mag (In front of grip)
+            ctx.fillStyle = '#333';
+            ctx.beginPath(); ctx.roundRect(0.14, bodyH/2, 0.12, 0.4, 0.01); ctx.fill(); ctx.stroke();
+            
+            // Receiver (Boxy)
+            ctx.save(); ctx.translate(-0.05 - slideKick*0.5, -bodyH/2);
+            ctx.fillStyle = '#2A2C2E';
+            ctx.beginPath(); ctx.roundRect(0, 0, bodyW, bodyH, 0.02); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#111'; ctx.fillRect(0.05, -0.03, 0.04, 0.03); ctx.fillRect(bodyW - 0.05, -0.03, 0.02, 0.03); // Sights
+            // Short barrel
+            ctx.fillStyle = '#444'; ctx.fillRect(bodyW, 0.04, 0.1, 0.08);
+            ctx.restore();
+
+            // Hands (SMG) - Front hand on magazine
+            ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
+            ctx.beginPath(); ctx.arc(0.02, 0.15, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back grip
+            ctx.beginPath(); ctx.arc(0.2, 0.25, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front mag
         }
+        else if (this.currentWeapon === 'shotgun') {
+            // Shotgun: Long, wood furniture, pump action
+            // Stock & Grip
+            ctx.fillStyle = '#8B5A2B'; ctx.strokeStyle = '#3E2723'; ctx.lineWidth = 0.015;
+            ctx.beginPath(); ctx.moveTo(0.08, 0.05); ctx.lineTo(-0.25, 0.15); ctx.lineTo(-0.25, 0.02); ctx.lineTo(0.08, -0.05); ctx.fill(); ctx.stroke(); // Stock
+
+            // Receiver
+            ctx.fillStyle = '#222';
+            ctx.beginPath(); ctx.roundRect(0.04, -0.05, 0.2, 0.12, 0.02); ctx.fill(); ctx.stroke();
+
+            // Barrel
+            ctx.fillStyle = '#333';
+            ctx.beginPath(); ctx.roundRect(0.24, -0.02, 0.5, 0.06, 0.01); ctx.fill(); ctx.stroke();
+            // Tube underneath
+            ctx.fillRect(0.24, 0.04, 0.45, 0.04);
+
+            // Pump (Moves backwards slightly when firing)
+            const pumpKick = this.fireTimer > 0 ? kickRatio * 0.1 : 0;
+            ctx.fillStyle = '#8B5A2B'; 
+            ctx.beginPath(); ctx.roundRect(0.35 - pumpKick, 0.03, 0.2, 0.07, 0.02); ctx.fill(); ctx.stroke();
+            
+            // Serrations on pump
+            ctx.strokeStyle = '#3E2723'; ctx.lineWidth = 0.01;
+            for(let i=0; i<6; i++) {
+                ctx.beginPath(); ctx.moveTo(0.38 - pumpKick + i*0.03, 0.04); ctx.lineTo(0.38 - pumpKick + i*0.03, 0.09); ctx.stroke();
+            }
+
+            // Hands (Shotgun)
+            ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
+            ctx.beginPath(); ctx.arc(0.05, 0.06, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back trigger
+            ctx.beginPath(); ctx.arc(0.45 - pumpKick, 0.08, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front pump
+        }
+        else if (this.currentWeapon === 'rifle') {
+            // Rifle: Assault rifle style (M4), handguard, curved mag
+            // Stock
+            ctx.fillStyle = '#111'; ctx.strokeStyle = '#000'; ctx.lineWidth = 0.015;
+            ctx.beginPath(); ctx.moveTo(0.05, 0); ctx.lineTo(-0.2, 0.1); ctx.lineTo(-0.2, -0.05); ctx.lineTo(0.05, -0.05); ctx.fill(); ctx.stroke();
+
+            // Grip
+            ctx.beginPath(); ctx.roundRect(-0.04, 0.05, 0.08, 0.2, 0.02); ctx.fill(); ctx.stroke();
+
+            // Receiver
+            ctx.fillStyle = '#2A2C2E';
+            ctx.beginPath(); ctx.roundRect(0.02, -0.08, 0.25, 0.15, 0.01); ctx.fill(); ctx.stroke();
+            
+            // Carry Handle / Sight
+            ctx.fillRect(0.05, -0.12, 0.15, 0.04);
+            
+            // Curved Mag
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.moveTo(0.18, 0.07); ctx.lineTo(0.24, 0.35); ctx.lineTo(0.14, 0.32); ctx.lineTo(0.12, 0.07);
+            ctx.fill(); ctx.stroke();
+            
+            // Barrel & Handguard
+            ctx.fillStyle = '#1A1C1E';
+            ctx.beginPath(); ctx.roundRect(0.27, -0.05, 0.3, 0.1, 0.01); ctx.fill(); ctx.stroke(); // Handguard
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0.57, -0.02, 0.15, 0.04); // Exposed Barrel
+
+            // Handguard Vents
+            ctx.fillStyle = '#000';
+            for(let i=0; i<5; i++) {
+                ctx.fillRect(0.3 + i*0.05, -0.03, 0.03, 0.06);
+            }
+
+            // Hands (Rifle)
+            ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
+            ctx.beginPath(); ctx.arc(0.02, 0.12, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back grip
+            ctx.beginPath(); ctx.arc(0.35, 0.06, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front handguard
+        }
+
+        ctx.restore(); // End Weapon Scale
 
         // --- MASSIVE MUZZLE FLASH ---
         if ((this as any).muzzleFlashTimer > 0) {

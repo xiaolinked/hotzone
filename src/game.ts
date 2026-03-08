@@ -8,10 +8,12 @@ import { WaveManager } from './managers/WaveManager';
 import { InputManager } from './input';
 import { Coin } from './entities/Coin';
 import { AudioManager } from './audio/AudioManager';
-import { RICK_ROLL_NOTES } from './rickroll';
+import { Turret } from './entities/Turret';
+import { MedicalTurret } from './entities/MedicalTurret';
+import { Landmine } from './entities/Landmine';
 
 export interface UpgradeOption {
-    type: 'damage' | 'firerate' | 'multishot' | 'health' | 'stamina' | 'ammo' | 'regen' | 'armor' | 'crit' | 'weapon';
+    type: 'damage' | 'firerate' | 'multishot' | 'health' | 'stamina' | 'ammo' | 'regen' | 'armor' | 'crit' | 'weapon' | 'turret' | 'med_turret' | 'mines';
     name: string;
     description: string;
     cost: number;
@@ -20,10 +22,10 @@ export interface UpgradeOption {
 
 // Weapon stat definitions
 const WEAPON_STATS: { [id: string]: { damage: number, fireRate: number, range: number, magSize: number, reloadTime: number, spread: number, multishot: number, bulletSpeed: number } } = {
-    pistol: { damage: 10, fireRate: 0.42, range: 25, magSize: 10, reloadTime: 1.2, spread: 0, multishot: 1, bulletSpeed: 18 },
-    smg: { damage: 4, fireRate: 0.12, range: 20, magSize: 20, reloadTime: 1.5, spread: 0.08, multishot: 1, bulletSpeed: 20 },
-    shotgun: { damage: 14, fireRate: 0.7, range: 12, magSize: 6, reloadTime: 2.0, spread: 0.12, multishot: 5, bulletSpeed: 16 },
-    rifle: { damage: 25, fireRate: 0.55, range: 35, magSize: 8, reloadTime: 1.8, spread: 0, multishot: 1, bulletSpeed: 28 },
+    pistol: { damage: 10, fireRate: 0.22, range: 25, magSize: 10, reloadTime: 0.8, spread: 0, multishot: 1, bulletSpeed: 25 },
+    smg: { damage: 4, fireRate: 0.12, range: 15, magSize: 20, reloadTime: 1.0, spread: 0.08, multishot: 1, bulletSpeed: 28 },
+    shotgun: { damage: 14, fireRate: 0.45, range: 12, magSize: 6, reloadTime: 1.4, spread: 0.12, multishot: 5, bulletSpeed: 22 },
+    rifle: { damage: 25, fireRate: 0.35, range: 35, magSize: 8, reloadTime: 1.6, spread: 0, multishot: 1, bulletSpeed: 30 },
 };
 
 export class Game {
@@ -36,6 +38,9 @@ export class Game {
     public bombs: Bomb[] = [];
     public bullets: Bullet[] = [];
     public coins: Coin[] = [];
+    public turrets: Turret[] = [];
+    public medTurrets: MedicalTurret[] = [];
+    public mines: Landmine[] = [];
     private generatedChunks: Set<string> = new Set();
 
     public score: number = 0;
@@ -45,12 +50,16 @@ export class Game {
     public rerollCost: number = 20;
     public shopCooldown: number = 0;
     public shopScrollOffset: number = 0;
+    
+    // --- NEW ITEM STATES ---
+    public pendingTurrets: number = 0;
+    public pendingMedTurrets: number = 0;
+    public pendingMines: number = 0;
     public hitStopTimer: number = 0;
 
     public deathPauseTimer: number = 0;
     public deathHighlightTimer: number = 0;
     private isDeathSequenceStarted: boolean = false;
-    public isRickRolled: boolean = false;
 
     public waveManager: WaveManager;
     public isPaused: boolean = false;
@@ -168,7 +177,6 @@ export class Game {
 
     public restart() {
         const config = ConfigManager.getConfig();
-        AudioManager.stopRickRoll();
         this.hero = new Hero(0, 0);
         this.enemies = [];
         this.bombs = [];
@@ -179,7 +187,6 @@ export class Game {
         this.coinCount = 0;
         this.waveManager = new WaveManager(this);
         this.isDeathSequenceStarted = false;
-        this.isRickRolled = false;
         this.deathPauseTimer = 0;
         this.deathHighlightTimer = 0;
         this.rerollCost = config.shop.reroll_base_cost;
@@ -207,6 +214,10 @@ export class Game {
                 AudioManager.playCoin();
             }
         }
+    }
+
+    public addComboText(text: string, x: number, y: number) {
+        this.combos.push({ x, y, text, timer: 1.0 });
     }
 
     private buyUpgrade(index: number) {
@@ -262,6 +273,15 @@ export class Game {
                 case 'crit':
                     this.hero.critChance = Math.min(1.0, this.hero.critChance + 0.02);
                     break;
+                case 'turret':
+                    this.pendingTurrets++;
+                    break;
+                case 'med_turret':
+                    this.pendingMedTurrets++;
+                    break;
+                case 'mines':
+                    this.pendingMines++;
+                    break;
                 case 'weapon': {
                     const ws = WEAPON_STATS[wId];
                     if (ws) {
@@ -272,17 +292,9 @@ export class Game {
             }
 
             // PER USER REQUEST:
-            // 1. If it was a weapon purchase/switch, DO NOT remove the option (so player can switch back/forth)
-            // 2. If it was a stat upgrade, REMOVE ALL OTHER stat upgrades from the shop
-            if (!isWeapon) {
-                this.currentShopOptions = this.currentShopOptions.map(o => {
-                    if (o && o.type !== 'weapon') return null as any;
-                    return o;
-                });
-            } else if (!isWeaponOwned) {
-                // For a NEW weapon purchase, we could clear it or keep it as "Owned".
-                // I'll keep it so it shows "ALREADY PURCHASED" instantly.
-            }
+            // Auto-refresh the shop immediately after any purchase!
+            // We just regenerate the options so the player can buy endlessly
+            this.generateUpgradeOptions();
 
             // MANUAL DEPLOY ONLY: Removed triggerNextPhase()
         } else {
@@ -344,14 +356,7 @@ export class Game {
                 this.renderer.triggerShake(1.5, 2.0);
                 this.renderer.triggerDeathFlash();
 
-                // ALWAYS Rick Roll
-                if (Math.random() < 1.1) {
-                    this.isRickRolled = true;
-                    // Play the song after the explosion (1.5s delay)
-                    setTimeout(() => AudioManager.playRickRollSequence(RICK_ROLL_NOTES), 1500);
-                } else {
-                    AudioManager.playDeath();
-                }
+                AudioManager.playDeath();
             }
 
             if (clickHappened) {
@@ -412,6 +417,27 @@ export class Game {
                 if (this.waveManager.isReady) {
                     const inStartBtn = Math.abs(mx - cx) < 140 && Math.abs(my - (h / 2)) < 27.5;
                     const inIndexBtn = Math.abs(mx - cx) < 140 && Math.abs(my - (h / 2 + 70)) < 27.5;
+                    
+                    // Color Swatches Hit Detection
+                    const colors = ['#FF3333', '#3388FF', '#33FF55', '#FFCC00', '#B833FF'];
+                    const swatchSize = 40;
+                    const swatchGap = 15;
+                    const totalWidth = (colors.length * swatchSize) + ((colors.length - 1) * swatchGap);
+                    const startX = cx - totalWidth / 2;
+                    const swatchY = (h / 2) + 140;
+
+                    let swatchClicked = false;
+                    if (clickHappened) {
+                        for (let i = 0; i < colors.length; i++) {
+                            const x = startX + i * (swatchSize + swatchGap);
+                            if (mx >= x && mx <= x + swatchSize && my >= swatchY && my <= swatchY + swatchSize) {
+                                Hero.defaultHatColor = colors[i];
+                                this.hero.hatColor = colors[i]; // Update immediately for preview
+                                swatchClicked = true;
+                                break;
+                            }
+                        }
+                    }
 
                     if (isKeyboard || inStartBtn) {
                         this.waveManager.triggerNextPhase();
@@ -420,7 +446,7 @@ export class Game {
                         return;
                     }
 
-                    if (inIndexBtn) {
+                    if (!swatchClicked && inIndexBtn) {
                         this.waveManager.openIndex();
                         return;
                     }
