@@ -234,39 +234,21 @@
                 "weaponId": "smg",
                 "name": "SMG",
                 "description": "Fast fire, 25 rounds",
-                "cost": 75
+                "cost": 1
             },
             {
                 "type": "weapon",
                 "weaponId": "shotgun",
                 "name": "Shotgun",
                 "description": "5 pellets, high DMG",
-                "cost": 100
+                "cost": 1
             },
             {
                 "type": "weapon",
                 "weaponId": "rifle",
                 "name": "Rifle",
                 "description": "High DMG, long range",
-                "cost": 150
-            },
-            {
-                "type": "turret",
-                "name": "Auto-Turret",
-                "description": "Deploys a stationary\nturret to fight",
-                "cost": 10
-            },
-            {
-                "type": "med_turret",
-                "name": "Med-Turret",
-                "description": "Deploys a turret\nthat heals you",
-                "cost": 10
-            },
-            {
-                "type": "mines",
-                "name": "Landmines",
-                "description": "Drops 3 explosive\nmines next wave",
-                "cost": 5
+                "cost": 1
             }
         ]
     },

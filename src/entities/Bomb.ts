@@ -143,6 +143,8 @@ export class Bomb extends Entity {
         // Transfer to global bomb list to ensure rendering if parent dies
         if (this.parent) {
             this.parent.bomb = null; // Detach from parent
+            // Kill the parent if the bomb explodes while still attached!
+            this.parent.takeDamage(9999);
             this.parent = null;
             if (!game.bombs.includes(this)) {
                 game.bombs.push(this); // Handover to Game loop

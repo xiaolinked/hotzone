@@ -145,32 +145,7 @@ export class Renderer {
       this.ctx.fill();
     }
     
-    // Turret shadows
-    if (game.turrets) {
-        for (const turret of game.turrets) {
-            this.ctx.beginPath();
-            this.ctx.ellipse(turret.x, turret.y + 0.4, 0.8, 0.3, 0, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-    }
-    
-    // Med Turret shadows
-    if (game.medTurrets) {
-        for (const med of game.medTurrets) {
-            this.ctx.beginPath();
-            this.ctx.ellipse(med.x, med.y + 0.4, 0.8, 0.3, 0, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-    }
-
-    // Landmine shadows
-    if (game.mines) {
-        for (const mine of game.mines) {
-            this.ctx.beginPath();
-            this.ctx.ellipse(mine.x, mine.y + 0.15, 0.5, 0.2, 0, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-    }
+    // (Item shadows removed)
 
     this.ctx.restore();
 
@@ -197,23 +172,7 @@ export class Renderer {
       entities.hero.draw(this.ctx);
     }
 
-    if (game.turrets) {
-      for (const turret of game.turrets) {
-        turret.draw(this.ctx);
-      }
-    }
-
-    if (game.medTurrets) {
-      for (const med of game.medTurrets) {
-        med.draw(this.ctx);
-      }
-    }
-
-    if (game.mines) {
-      for (const mine of game.mines) {
-        mine.draw(this.ctx);
-      }
-    }
+    // (Items removed)
 
     this.drawTelegraphs(game);
     this.drawEnemyBars(entities.enemies);
@@ -907,10 +866,9 @@ export class Renderer {
           ctx.fillStyle = "#00FF88";
           ctx.fillText("EQUIPPED", x + cardWidth / 2, costY + 5);
         } else if (isOwned) {
-          ctx.fillStyle = "#FFD84D"; // Gold
-          // Adaptive font for long text
+          ctx.fillStyle = "#FFFFFF"; // White
           if (cardWidth < 150) ctx.font = `bold ${Math.max(8, Math.floor(14 * (cardWidth / 260)))}px monospace`;
-          ctx.fillText("ALREADY PURCHASED", x + cardWidth / 2, costY + 5);
+          ctx.fillText("EQUIP", x + cardWidth / 2, costY + 5);
         } else {
           ctx.fillStyle = afford ? "#00FF88" : "#FF4444";
           ctx.fillText(`COINS: ${opt.cost}`, x + cardWidth / 2, costY + 5);
@@ -1215,32 +1173,6 @@ export class Renderer {
         ctx.fillText(stat.value.toString(), x + barWidth - 15, currentY);
       });
 
-      // --- ACTIVE ITEMS COUNTER ---
-      if (!input.isTouchDevice) {
-        const itemCount = (game.turrets?.length ?? 0) + (game.medTurrets?.length ?? 0) + (game.mines?.length ?? 0);
-        if (itemCount > 0) {
-          const itemY = y + barHeight + 10;
-          ctx.fillStyle = "rgba(0,0,0,0.75)";
-          ctx.beginPath();
-          ctx.roundRect(x, itemY, barWidth, 40, 8);
-          ctx.fill();
-          ctx.strokeStyle = "rgba(68, 136, 255, 0.5)";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-
-          ctx.textAlign = "left";
-          ctx.fillStyle = "#4488FF";
-          ctx.font = "bold 11px monospace";
-          ctx.textBaseline = "middle";
-          ctx.fillText("🔫 ACTIVE ITEMS", x + 12, itemY + 12);
-          ctx.fillStyle = "#FFFFFF";
-          ctx.font = "12px monospace";
-          const turretCount = game.turrets?.length ?? 0;
-          const medCount = game.medTurrets?.length ?? 0;
-          const mineCount = game.mines?.length ?? 0;
-          ctx.fillText(`${turretCount}🔫  ${medCount}❤  ${mineCount}💣`, x + 12, itemY + 28);
-        }
-      }
     }
 
     ctx.restore();
@@ -1380,53 +1312,7 @@ export class Renderer {
       ctx.restore();
     }
 
-    // --- Item Spawn X (Blue) ---
-    const itemTelegraphs = game.waveManager.activeItemTelegraphs;
-    if (itemTelegraphs) {
-      for (const t of itemTelegraphs) {
-        ctx.save();
-        ctx.translate(t.x, t.y);
-
-        // Spin and pulse
-        const elapsed = (t.maxTimer - t.timer) / t.maxTimer;
-        const spin = elapsed * Math.PI * 4;
-        ctx.rotate(spin);
-
-        const pulse = 0.8 + Math.sin(Date.now() * 0.02) * 0.2;
-        ctx.scale(pulse, pulse);
-
-        // Glowing background circle
-        ctx.globalAlpha = 0.2;
-        ctx.fillStyle = t.type === 'med_turret' ? '#00FF88' : (t.type === 'mine' ? '#FFAA00' : '#4488FF');
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // X stroke
-        ctx.globalAlpha = 0.9;
-        ctx.strokeStyle = t.type === 'med_turret' ? '#00FF88' : (t.type === 'mine' ? '#FFAA00' : '#4488FF');
-        ctx.lineWidth = 0.5;
-        ctx.lineCap = 'round';
-        const s = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(-s, -s); ctx.lineTo(s, s);
-        ctx.moveTo(s, -s);  ctx.lineTo(-s, s);
-        ctx.stroke();
-
-        // Label
-        ctx.scale(1 / this.pixelsPerUnit, 1 / this.pixelsPerUnit);
-        ctx.rotate(-spin); // Counter-rotate so text stays upright
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.textAlign = 'center';
-        ctx.fillText(
-          t.type === 'turret' ? '🔫' : t.type === 'med_turret' ? '❤' : '💣',
-          0, -35
-        );
-
-        ctx.restore();
-      }
-    }
+    // (Item Telegraphs removed)
   }
 
   private drawButton(

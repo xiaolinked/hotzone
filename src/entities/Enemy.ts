@@ -147,13 +147,8 @@ export class Enemy extends Entity {
         if (isPlayer) this.damagedByPlayer = true;
         // Shield absorbs damage first
         if (this.shield > 0) {
-            this.shield -= amount;
-            if (this.shield < 0) {
-                // Shield Break!
-                const overflow = -this.shield;
-                this.shield = 0;
-                this.hp -= overflow;
-            }
+            this.shield = 0; // Shield breaks after 1 hit no matter what
+            // No overflow damage applied when shield breaks
         } else {
             this.hp -= amount;
         }

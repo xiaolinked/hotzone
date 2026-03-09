@@ -5,9 +5,6 @@ import { FastEnemy } from "../entities/FastEnemy";
 import { TankEnemy } from "../entities/TankEnemy";
 import { BlinkerEnemy } from "../entities/BlinkerEnemy";
 import { SplitterEnemy } from "../entities/SplitterEnemy";
-import { Turret } from "../entities/Turret";
-import { MedicalTurret } from "../entities/MedicalTurret";
-import { Landmine } from "../entities/Landmine";
 
 export enum WaveState {
     READY,      // Before Wave 1
@@ -26,19 +23,10 @@ export interface SpawnTelegraph {
     maxTimer: number;
 }
 
-export interface ItemTelegraph {
-    x: number;
-    y: number;
-    timer: number;
-    maxTimer: number;
-    type: 'turret' | 'med_turret' | 'mine';
-}
-
 export class WaveManager {
     private game: Game;
     public currentWave: number = 0;
     public activeTelegraphs: SpawnTelegraph[] = [];
-    public activeItemTelegraphs: ItemTelegraph[] = [];
 
     public state: WaveState = WaveState.READY;
     public stateTimer: number = 0; // Generic timer for countdown/wave
@@ -67,7 +55,6 @@ export class WaveManager {
                 } else {
                     this.handleSpawning(dt);
                     this.updateTelegraphs(dt);
-                    this.updateItemTelegraphs(dt);
                 }
                 break;
             case WaveState.WAVE_COMPLETE:
@@ -130,36 +117,6 @@ export class WaveManager {
         this.stateTimer = config.game_flow.wave_base_duration + (this.currentWave - 1) * config.game_flow.wave_duration_growth;
 
         console.log(`Wave ${this.currentWave} Started! Duration: ${this.stateTimer.toFixed(1)}s`);
-
-        // Spawn Pending Items via Telegraphs (Delay spawn by 2s)
-        for (let i = 0; i < this.game.pendingTurrets; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 1.5 + Math.random() * 2.0;
-            const tx = this.game.hero.x + Math.cos(angle) * dist;
-            const ty = this.game.hero.y + Math.sin(angle) * dist;
-            this.activeItemTelegraphs.push({ x: tx, y: ty, timer: 2.0, maxTimer: 2.0, type: 'turret' });
-        }
-        this.game.pendingTurrets = 0;
-
-        for (let i = 0; i < this.game.pendingMedTurrets; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 1.5 + Math.random() * 2.0;
-            const mx = this.game.hero.x + Math.cos(angle) * dist;
-            const my = this.game.hero.y + Math.sin(angle) * dist;
-            this.activeItemTelegraphs.push({ x: mx, y: my, timer: 2.0, maxTimer: 2.0, type: 'med_turret' });
-        }
-        this.game.pendingMedTurrets = 0;
-
-        for (let i = 0; i < this.game.pendingMines; i++) {
-            for (let j = 0; j < 3; j++) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 1.0 + Math.random() * 1.5;
-                const tx = this.game.hero.x + Math.cos(angle) * dist;
-                const ty = this.game.hero.y + Math.sin(angle) * dist;
-                this.activeItemTelegraphs.push({ x: tx, y: ty, timer: 2.0, maxTimer: 2.0, type: 'mine' });
-            }
-        }
-        this.game.pendingMines = 0;
     }
 
     private endWave() {
@@ -198,7 +155,6 @@ export class WaveManager {
         this.game.coins = [];
         this.game.bullets = []; // Clear bullets
         this.activeTelegraphs = [];
-        this.activeItemTelegraphs = [];
 
         this.game.generateUpgradeOptions();
         this.game.rerollCost = ConfigManager.getConfig().shop.reroll_base_cost;
@@ -271,24 +227,6 @@ export class WaveManager {
             if (t.timer <= 0) {
                 this.spawnEnemyAt(t.x, t.y);
                 this.activeTelegraphs.splice(i, 1);
-            }
-        }
-    }
-
-    private updateItemTelegraphs(dt: number) {
-        for (let i = this.activeItemTelegraphs.length - 1; i >= 0; i--) {
-            const t = this.activeItemTelegraphs[i];
-            t.timer -= dt;
-
-            if (t.timer <= 0) {
-                if (t.type === 'turret') {
-                    this.game.turrets.push(new Turret(t.x, t.y));
-                } else if (t.type === 'med_turret') {
-                    this.game.medTurrets.push(new MedicalTurret(t.x, t.y));
-                } else if (t.type === 'mine') {
-                    this.game.mines.push(new Landmine(t.x, t.y));
-                }
-                this.activeItemTelegraphs.splice(i, 1);
             }
         }
     }

@@ -768,10 +768,10 @@ export class Hero extends Entity {
             ctx.fillStyle = '#888'; ctx.fillRect(slideW, 0.04, 0.02, 0.06); // Barrel Let
             ctx.restore();
 
-            // Hands (Pistol)
+            // Hands (Pistol) - Both on grip
             ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
-            ctx.beginPath(); ctx.arc(0.02, slideH * 0.5 + 0.05, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back
-            ctx.beginPath(); ctx.arc(0.18, slideH * 0.5 + 0.03, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front
+            ctx.beginPath(); ctx.arc(0.02, slideH * 0.5 + 0.05, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back hand
+            ctx.beginPath(); ctx.arc(0.05, slideH * 0.5 + 0.07, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front hand (also on grip)
         } 
         else if (this.currentWeapon === 'smg') {
             // SMG: Compact, boxy, extended mag (like a MAC-10)
@@ -794,10 +794,10 @@ export class Hero extends Entity {
             ctx.fillStyle = '#444'; ctx.fillRect(bodyW, 0.04, 0.1, 0.08);
             ctx.restore();
 
-            // Hands (SMG) - Front hand on magazine
+            // Hands (SMG) - Both on grip
             ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
             ctx.beginPath(); ctx.arc(0.02, 0.15, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back grip
-            ctx.beginPath(); ctx.arc(0.2, 0.25, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front mag
+            ctx.beginPath(); ctx.arc(0.05, 0.18, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front grip
         }
         else if (this.currentWeapon === 'shotgun') {
             // Shotgun: Long, wood furniture, pump action
@@ -865,10 +865,10 @@ export class Hero extends Entity {
                 ctx.fillRect(0.3 + i*0.05, -0.03, 0.03, 0.06);
             }
 
-            // Hands (Rifle)
+            // Hands (Rifle) - Both on grip
             ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
             ctx.beginPath(); ctx.arc(0.02, 0.12, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back grip
-            ctx.beginPath(); ctx.arc(0.35, 0.06, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front handguard
+            ctx.beginPath(); ctx.arc(0.05, 0.15, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front hand (also on grip)
         }
 
         ctx.restore(); // End Weapon Scale

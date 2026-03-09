@@ -8,12 +8,9 @@ import { WaveManager } from './managers/WaveManager';
 import { InputManager } from './input';
 import { Coin } from './entities/Coin';
 import { AudioManager } from './audio/AudioManager';
-import { Turret } from './entities/Turret';
-import { MedicalTurret } from './entities/MedicalTurret';
-import { Landmine } from './entities/Landmine';
 
 export interface UpgradeOption {
-    type: 'damage' | 'firerate' | 'multishot' | 'health' | 'stamina' | 'ammo' | 'regen' | 'armor' | 'crit' | 'weapon' | 'turret' | 'med_turret' | 'mines';
+    type: 'damage' | 'firerate' | 'multishot' | 'health' | 'stamina' | 'ammo' | 'regen' | 'armor' | 'crit' | 'weapon';
     name: string;
     description: string;
     cost: number;
@@ -38,9 +35,6 @@ export class Game {
     public bombs: Bomb[] = [];
     public bullets: Bullet[] = [];
     public coins: Coin[] = [];
-    public turrets: Turret[] = [];
-    public medTurrets: MedicalTurret[] = [];
-    public mines: Landmine[] = [];
     private generatedChunks: Set<string> = new Set();
 
     public score: number = 0;
@@ -51,10 +45,6 @@ export class Game {
     public shopCooldown: number = 0;
     public shopScrollOffset: number = 0;
     
-    // --- NEW ITEM STATES ---
-    public pendingTurrets: number = 0;
-    public pendingMedTurrets: number = 0;
-    public pendingMines: number = 0;
     public hitStopTimer: number = 0;
 
     public deathPauseTimer: number = 0;
@@ -272,15 +262,6 @@ export class Game {
                     break;
                 case 'crit':
                     this.hero.critChance = Math.min(1.0, this.hero.critChance + 0.02);
-                    break;
-                case 'turret':
-                    this.pendingTurrets++;
-                    break;
-                case 'med_turret':
-                    this.pendingMedTurrets++;
-                    break;
-                case 'mines':
-                    this.pendingMines++;
                     break;
                 case 'weapon': {
                     const ws = WEAPON_STATS[wId];

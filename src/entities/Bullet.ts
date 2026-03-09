@@ -78,6 +78,7 @@ export class Bullet extends Entity {
         } else {
             // Collision with Enemies
             for (const enemy of game.enemies) {
+                if (enemy.isFadingOut || enemy.isDead) continue;
                 if (this.distanceTo(enemy) < (collRadius + enemy.getCollisionRadius())) {
                     enemy.takeDamage(this.damage, true);
                     this.isDead = true;
