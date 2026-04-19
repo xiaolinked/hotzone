@@ -1,8 +1,7 @@
 import { ConfigManager } from "./config";
 import { Game } from "./game";
 import { InputManager } from "./input";
-import { Hero } from "./entities/Hero";
-
+import { CHARACTER_CLASSES } from "./game";
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -170,6 +169,23 @@ export class Renderer {
 
     if (entities.hero) {
       entities.hero.draw(this.ctx);
+
+      if (entities.hero.currentWeapon === 'laser' && entities.hero.charge > 0) {
+          this.ctx.save();
+          this.ctx.translate(entities.hero.x, entities.hero.y - 1.2);
+          this.ctx.scale(1 / this.pixelsPerUnit, 1 / this.pixelsPerUnit);
+          
+          const w = 40;
+          const h = 6;
+          
+          this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          this.ctx.fillRect(-w/2, -h/2, w, h);
+
+          this.ctx.fillStyle = entities.hero.charge >= 1.0 ? '#FF00FF' : '#FFD84D';
+          this.ctx.fillRect(-w/2 + 1, -h/2 + 1, (w - 2) * entities.hero.charge, h - 2);
+          
+          this.ctx.restore();
+      }
     }
 
     // (Items removed)
@@ -185,12 +201,14 @@ export class Renderer {
       this.ctx.font = "bold 32px sans-serif";
       this.ctx.textAlign = "center";
       this.ctx.textBaseline = "middle";
-      const alpha = Math.min(1.0, combo.timer * 2);
-      this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-      this.ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`;
+      const alpha = Math.max(0, Math.min(1.0, combo.timer * 2));
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = combo.color || "#FFFFFF";
+      this.ctx.strokeStyle = "#000000";
       this.ctx.lineWidth = 4;
-      this.ctx.strokeText(combo.text, 0, 0);
-      this.ctx.fillText(combo.text, 0, 0);
+      const offset_y = (1.0 - combo.timer) * 80;
+      this.ctx.strokeText(combo.text, 0, -offset_y);
+      this.ctx.fillText(combo.text, 0, -offset_y);
       this.ctx.restore();
     }
 
@@ -634,11 +652,54 @@ export class Renderer {
     } else if (waveMgr.isReady) {
       ctx.fillStyle = "#FF0000";
       ctx.font = "bold 80px sans-serif";
-      ctx.fillText("HOT ZONE", centerX, height / 2 - 120);
+      ctx.fillText("HOT ZONE", centerX, height / 2 - 380);
 
       ctx.fillStyle = "#FFFFFF";
       ctx.font = "bold 24px sans-serif";
-      ctx.fillText("MADE BY ANTON LI USING AI", centerX, height / 2 - 80);
+      ctx.fillText("SELECT DEPLOYMENT RIG", centerX, height / 2 - 340);
+
+      // --- CHARACTER SELECTION CARDS ---
+      const inputMgr = InputManager.getInstance();
+      const cardW = 200;
+      const cardH = 250;
+      const spacing = 30;
+      const totalW = 3 * cardW + 2 * spacing;
+      const startX = centerX - totalW / 2 + cardW / 2;
+      const cardY = height / 2 - 200;
+
+      const mouseX = inputMgr.mouse.x;
+      const mouseY = inputMgr.mouse.y;
+
+      for (let i = 0; i < CHARACTER_CLASSES.length; i++) {
+          const charClass = CHARACTER_CLASSES[i];
+          const x = startX + i * (cardW + spacing);
+          const y = cardY;
+          const isSelected = game.selectedCharacterId === charClass.id;
+          const isHovered = Math.abs(mouseX - x) < cardW / 2 && Math.abs(mouseY - y) < cardH / 2;
+
+          ctx.fillStyle = isSelected ? "rgba(255, 255, 255, 0.2)" : (isHovered ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.6)");
+          ctx.strokeStyle = isSelected ? charClass.color : "#555";
+          ctx.lineWidth = isSelected ? 4 : 2;
+
+          ctx.beginPath();
+          ctx.roundRect(x - cardW / 2, y - cardH / 2, cardW, cardH, 10);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = charClass.color;
+          ctx.font = "bold 24px sans-serif";
+          ctx.fillText(charClass.name, x, y - cardH / 2 + 35);
+
+          ctx.fillStyle = "#FFF";
+          ctx.font = "16px sans-serif";
+          ctx.fillText(`HP: ${charClass.hp}`, x, y);
+          ctx.fillText(`SPEED: ${charClass.speed}`, x, y + 25);
+          ctx.fillText(`STAM: ${charClass.stam}`, x, y + 50);
+
+          ctx.fillStyle = "#BBB";
+          ctx.font = "italic 14px sans-serif";
+          ctx.fillText(charClass.desc, x, y + 90);
+      }
 
       const startBtnY = height / 2;
       this.drawButton(centerX, startBtnY, 280, 55, "START GAME", "#00FF00");
@@ -651,55 +712,21 @@ export class Renderer {
         "#FFD84D",
       );
 
-      // --- COLOR CUSTOMIZATION SWATCHES ---
-      const colors = ['#FF3333', '#3388FF', '#33FF55', '#FFCC00', '#B833FF'];
-      const swatchSize = 40;
-      const swatchGap = 15;
-      const totalWidth = (colors.length * swatchSize) + ((colors.length - 1) * swatchGap);
-      const startX = centerX - totalWidth / 2;
-      const swatchY = startBtnY + 140;
-
-      ctx.save();
-      ctx.font = "14px sans-serif";
-      ctx.fillStyle = "#AAA";
-      ctx.fillText("SELECT HAT COLOR", centerX, swatchY - 15);
-
-      colors.forEach((c, i) => {
-          const x = startX + i * (swatchSize + swatchGap);
-          
-          // Selection Highlight
-          if (c === Hero.defaultHatColor) {
-              ctx.lineWidth = 3;
-              ctx.strokeStyle = "#FFF";
-              ctx.strokeRect(x - 3, swatchY - 3, swatchSize + 6, swatchSize + 6);
-          }
-
-          ctx.fillStyle = c;
-          ctx.fillRect(x, swatchY, swatchSize, swatchSize);
-          
-          // Inner shadow for depth
-          ctx.strokeStyle = "rgba(0,0,0,0.5)";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, swatchY, swatchSize, swatchSize);
-      });
-      ctx.restore();
-
-
-      const input = InputManager.getInstance();
       ctx.font = "20px sans-serif";
       ctx.fillStyle = "#666"; // Dimmed slightly to make room for swatches
-      if (input.isTouchDevice) {
+      const textY = startBtnY + 140;
+      if (inputMgr.isTouchDevice) {
         ctx.fillText(
           "Touch Left Side to Move, Right Side to Aim",
           centerX,
-          swatchY + 70,
+          textY,
         );
-        ctx.fillText("Tap Buttons for Actions", centerX, swatchY + 100);
+        ctx.fillText("Tap Buttons for Actions", centerX, textY + 30);
       } else {
         ctx.fillText(
           "WASD/Arrows to Move, Mouse to Aim",
           centerX,
-          swatchY + 70,
+          textY,
         );
       }
     } else if (waveMgr.isIndexOpen) {
@@ -759,8 +786,6 @@ export class Renderer {
       }
 
       const cardsPerRow = 3;
-      const totalWidth = cardWidth * cardsPerRow + spacing * (cardsPerRow - 1);
-      const startX = centerX - totalWidth / 2;
       const startY = 180 + game.shopScrollOffset;
 
       // Create clipping region to prevent scrolling over the title/button
@@ -769,15 +794,53 @@ export class Renderer {
       ctx.rect(0, 150, this.width, this.height - 150);
       ctx.clip();
 
+      let weaponsCount = 0;
+      for (let i = 0; i < game.currentShopOptions.length; i++) {
+        if (game.currentShopOptions[i] && game.currentShopOptions[i].type === 'weapon') weaponsCount++;
+      }
+      const upgradesCount = game.currentShopOptions.length - weaponsCount;
+
+      const weaponsRows = Math.ceil(Math.max(1, weaponsCount) / cardsPerRow);
+      const upgradesStartY = startY + weaponsRows * (cardHeight + spacing) + 60;
+
+      if (weaponsCount > 0) {
+        ctx.fillStyle = "#FFD84D";
+        ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("WEAPONS", centerX, startY - 20);
+      }
+
+      if (upgradesCount > 0) {
+          ctx.fillStyle = "#FFD84D";
+          ctx.font = "bold 20px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("UPGRADES", centerX, upgradesStartY - 20);
+      }
+
       for (let i = 0; i < game.currentShopOptions.length; i++) {
         const opt = game.currentShopOptions[i];
         if (!opt) continue;
 
-        const row = Math.floor(i / cardsPerRow);
-        const col = i % cardsPerRow;
+        const isWeapon = opt.type === 'weapon';
+        let gridIndex = i;
+        let sectionStartY = startY;
+        let itemsInGroup = weaponsCount;
 
-        const x = startX + col * (cardWidth + spacing);
-        const y = startY + row * (cardHeight + spacing);
+        if (!isWeapon) {
+            gridIndex = i - weaponsCount;
+            itemsInGroup = upgradesCount;
+            sectionStartY = upgradesStartY;
+        }
+
+        const row = Math.floor(gridIndex / cardsPerRow);
+        const col = gridIndex % cardsPerRow;
+
+        const itemsInThisRow = Math.min(cardsPerRow, itemsInGroup - row * cardsPerRow);
+        const rowWidth = (itemsInThisRow * cardWidth) + (spacing * (itemsInThisRow - 1));
+        const currentStartX = centerX - rowWidth / 2;
+
+        const x = currentStartX + col * (cardWidth + spacing);
+        const y = sectionStartY + row * (cardHeight + spacing);
 
         const mx = input.mouse.x;
         const my = input.mouse.y;
@@ -847,7 +910,6 @@ export class Renderer {
         });
 
         // Cost Section
-        const isWeapon = opt.type === 'weapon';
         const weaponId = (opt as any).weaponId;
         const isOwned = isWeapon && game.hero.ownedWeapons.includes(weaponId);
         const isEquipped = isWeapon && game.hero.currentWeapon === weaponId;
@@ -878,8 +940,9 @@ export class Renderer {
       }
 
       // Reroll Button
-      const rowCount = Math.ceil(game.currentShopOptions.length / cardsPerRow);
-      const rerollBtnY = startY + rowCount * (cardHeight + spacing) - spacing + 30;
+      const upgradesRows = Math.ceil(upgradesCount / cardsPerRow);
+      const totalHeight = weaponsRows * (cardHeight + spacing) + (upgradesCount > 0 ? 60 + upgradesRows * (cardHeight + spacing) : 0);
+      const rerollBtnY = startY + totalHeight - spacing + 30;
       const canAffordReroll = game.coinCount >= game.rerollCost;
 
       this.drawButton(
@@ -1722,6 +1785,41 @@ export class Renderer {
         }
       },
       {
+        name: "SUMMONER",
+        subtitle: "Spawner Drone",
+        color: "#8A2BE2",
+        desc: "Maintains distance and continuously summons Spider-Bots.",
+        hp: 3, shield: 2, speed: 1, danger: "HIGH",
+        drawFn: (cx: CanvasRenderingContext2D) => {
+          cx.save();
+          cx.shadowBlur = 8;
+          cx.shadowColor = "#8A2BE2";
+          cx.strokeStyle = "#8A2BE2";
+          cx.lineWidth = 2;
+          cx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const angle = (i * 2 * Math.PI) / 5;
+            const px = Math.cos(angle) * 12;
+            const py = Math.sin(angle) * 12;
+            if (i === 0) cx.moveTo(px, py);
+            else cx.lineTo(px, py);
+            const innerAngle = angle + Math.PI / 5;
+            const ix = Math.cos(innerAngle) * 5;
+            const iy = Math.sin(innerAngle) * 5;
+            cx.lineTo(ix, iy);
+          }
+          cx.closePath();
+          cx.stroke();
+          cx.fillStyle = "rgba(138,43,226,0.15)";
+          cx.fill();
+          cx.fillStyle = "#FFF";
+          cx.beginPath();
+          cx.arc(0, 0, 4, 0, Math.PI * 2);
+          cx.fill();
+          cx.restore();
+        }
+      },
+      {
         name: "SPIDER-BOT",
         subtitle: "Mini Swarm Unit",
         color: "#FFA500",
@@ -2076,6 +2174,13 @@ export class Renderer {
           ctx.roundRect(-30, 3, 20, 10, 1);  // Full stock
           ctx.roundRect(-5, 3, 8, 15, 1);    // Grip
           ctx.roundRect(10, 3, 6, 14, 1);    // Curved-ish mag
+          ctx.stroke();
+        } else if (weaponId === 'laser') {
+          // Laser silhouette (Boxy futuristic)
+          ctx.beginPath();
+          ctx.roundRect(-25, -6, 50, 12, 1); // Main barrel
+          ctx.roundRect(-10, -8, 20, 16, 2); // Central flux capacitor
+          ctx.roundRect(-15, 6, 8, 12, 1);   // Grip
           ctx.stroke();
         } else {
           // Default Pistol

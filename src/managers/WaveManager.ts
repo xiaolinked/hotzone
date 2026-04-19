@@ -5,6 +5,7 @@ import { FastEnemy } from "../entities/FastEnemy";
 import { TankEnemy } from "../entities/TankEnemy";
 import { BlinkerEnemy } from "../entities/BlinkerEnemy";
 import { SplitterEnemy } from "../entities/SplitterEnemy";
+import { SummonerEnemy } from "../entities/SummonerEnemy";
 
 export enum WaveState {
     READY,      // Before Wave 1
@@ -257,49 +258,19 @@ export class WaveManager {
         const rand = Math.random();
         let enemy: Enemy;
 
-        if (this.currentWave === 1) {
-            // Wave 1: Only Regular
-            enemy = new Enemy(x, y);
-        } else if (this.currentWave <= 5) {
-            // Early Game (Waves 2-5): Only Regular (70%) and Fast (30%)
-            if (rand < 0.3) {
-                enemy = new FastEnemy(x, y);
-            } else {
-                enemy = new Enemy(x, y);
-            }
-        } else if (this.currentWave <= 7) {
-            // Waves 6-7: Introduce Blinkers (no Tank/Splitter yet)
-            if (rand < 0.25) {
-                enemy = new FastEnemy(x, y);
-            } else if (rand < 0.40) {
-                enemy = new BlinkerEnemy(x, y);
-            } else {
-                enemy = new Enemy(x, y);
-            }
-        } else if (this.currentWave <= 9) {
-            // Waves 8-9: Add Splitter, still no Tank
-            if (rand < 0.20) {
-                enemy = new FastEnemy(x, y);
-            } else if (rand < 0.35) {
-                enemy = new BlinkerEnemy(x, y);
-            } else if (rand < 0.45) {
-                enemy = new SplitterEnemy(x, y);
-            } else {
-                enemy = new Enemy(x, y);
-            }
+        // Test Mode: Randomize all enemies regardless of wave
+        if (rand < 0.16) {
+            enemy = new TankEnemy(x, y);
+        } else if (rand < 0.32) {
+            enemy = new SummonerEnemy(x, y);
+        } else if (rand < 0.48) {
+            enemy = new FastEnemy(x, y);
+        } else if (rand < 0.64) {
+            enemy = new BlinkerEnemy(x, y);
+        } else if (rand < 0.8) {
+            enemy = new SplitterEnemy(x, y);
         } else {
-            // Wave 10+: Full Chaos with Tanks
-            if (rand < 0.1) {
-                enemy = new TankEnemy(x, y);
-            } else if (rand < 0.25) {
-                enemy = new FastEnemy(x, y);
-            } else if (rand < 0.4) {
-                enemy = new BlinkerEnemy(x, y);
-            } else if (rand < 0.5) {
-                enemy = new SplitterEnemy(x, y);
-            } else {
-                enemy = new Enemy(x, y);
-            }
+            enemy = new Enemy(x, y);
         }
 
         // Apply Wave Scaling

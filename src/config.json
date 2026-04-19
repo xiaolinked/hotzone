@@ -249,6 +249,13 @@
                 "name": "Rifle",
                 "description": "High DMG, long range",
                 "cost": 1
+            },
+            {
+                "type": "weapon",
+                "weaponId": "laser",
+                "name": "Laser",
+                "description": "Massive piercing beam",
+                "cost": 1
             }
         ]
     },

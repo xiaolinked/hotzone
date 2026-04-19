@@ -11,6 +11,11 @@ export class Bullet extends Entity {
     public isCrit: boolean = false;
     public weaponType: string = 'pistol';
     public isHealing: boolean = false;
+    public pierceCount: number = 0;
+    public distanceTraveled: number = 0;
+    public startDamage: number = 0;
+    public weaponRange: number = 0;
+    private hitEnemies: Set<any> = new Set();
 
     constructor(x: number, y: number, targetX: number, targetY: number, critChance: number = 0, weaponType: string = 'pistol', weaponDamage?: number, weaponSpeed?: number, weaponRange?: number) {
         super(x, y);
@@ -26,8 +31,17 @@ export class Bullet extends Entity {
             this.damage *= 3;
         }
 
+        if (this.weaponType === 'rifle') {
+            this.pierceCount = 2; // Rifle pierces up to 2 enemies (hits 3 total)
+        } else if (this.weaponType === 'laser') {
+            this.pierceCount = 999; // Infinite pierce
+        }
+
         const speed = weaponSpeed ?? config.blaster.bullet_speed;
         const range = weaponRange ?? config.blaster.bullet_range;
+        this.startDamage = this.damage;
+        this.weaponRange = range;
+        
         const dx = targetX - x;
         const dy = targetY - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -49,8 +63,15 @@ export class Bullet extends Entity {
             if (this.opacity < 0) this.opacity = 0;
             return;
         }
-
         // Move
+        const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
+        this.distanceTraveled += currentSpeed * dt;
+
+        if (this.weaponType === 'shotgun') {
+            const falloff = Math.max(0.1, 1.0 - (this.distanceTraveled / this.weaponRange));
+            this.damage = this.startDamage * falloff;
+        }
+
         this.x += this.velocity.x * dt;
         this.y += this.velocity.y * dt;
 
@@ -79,10 +100,23 @@ export class Bullet extends Entity {
             // Collision with Enemies
             for (const enemy of game.enemies) {
                 if (enemy.isFadingOut || enemy.isDead) continue;
+                if (this.hitEnemies.has(enemy)) continue;
+
                 if (this.distanceTo(enemy) < (collRadius + enemy.getCollisionRadius())) {
                     enemy.takeDamage(this.damage, true);
-                    this.isDead = true;
-                    return;
+                    this.hitEnemies.add(enemy);
+
+                    const dmgText = Math.floor(this.damage).toString();
+                    const color = this.isCrit ? '#00FFFF' : '#FFFFFF';
+                    game.addComboText(dmgText, enemy.x, enemy.y, color);
+
+                    if (this.pierceCount > 0) {
+                        this.pierceCount--;
+                        this.damage *= 0.8; // Reduce bullet damage by 20%
+                    } else {
+                        this.isDead = true;
+                        return;
+                    }
                 }
             }
         }
@@ -102,6 +136,8 @@ export class Bullet extends Entity {
             this.drawBuckshot(ctx);
         } else if (this.weaponType === 'rifle') {
             this.drawRifleBullet(ctx);
+        } else if (this.weaponType === 'laser') {
+            this.drawLaserBullet(ctx);
         } else {
             // Pistol/SMG
             this.drawRoundBullet(ctx);
@@ -192,5 +228,30 @@ export class Bullet extends Entity {
         ctx.moveTo(-0.4, -0.1);
         ctx.lineTo(0.3, -0.1);
         ctx.stroke();
+    }
+
+    private drawLaserBullet(ctx: CanvasRenderingContext2D): void {
+        const glow = this.isCrit ? 'rgba(255, 255, 255, 1.0)' : 'rgba(255, 0, 255, 0.8)';
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = glow;
+
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(-1.2, 0);
+        ctx.lineTo(1.2, 0);
+        ctx.stroke();
+
+        ctx.strokeStyle = this.isCrit ? '#00FFFF' : '#FF00FF';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-0.8, 0);
+        ctx.lineTo(0.8, 0);
+        ctx.stroke();
+        
+        // Reset properties
+        ctx.shadowBlur = 0;
+        ctx.lineCap = 'butt';
     }
 }

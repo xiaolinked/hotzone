@@ -1,5 +1,5 @@
 import { ConfigManager } from "../config";
-import { Game } from "../game";
+import { Game, CHARACTER_CLASSES } from "../game";
 import { InputManager } from "../input";
 import { Entity } from "./Entity";
 import { Bullet } from "./Bullet";
@@ -23,6 +23,8 @@ export class Hero extends Entity {
     public hp: number;
     public maxHp: number;
     public killingBlow: DeathClarityInfo | null = null;
+    public baseMoveSpeed: number = 10;
+    public speed: number = 10;
 
     public stamina: number;
     public maxStamina: number;
@@ -42,6 +44,10 @@ export class Hero extends Entity {
     // Cosmetics
     public static defaultHatColor: string = '#FF3333';
     public hatColor: string = Hero.defaultHatColor; // Assigned from default
+
+    public charge: number = 0;
+    private wasShootingLaser: boolean = false;
+    public lastFiredCharge: number = 1.0;
 
     private recoilVelocity: { x: number, y: number } = { x: 0, y: 0 };
     public weaponDamage: number = 10;
@@ -86,21 +92,26 @@ export class Hero extends Entity {
     public isDying: boolean = false;
     public lastMoveAngle: number = Math.PI / 2;
 
-    constructor(x: number, y: number) {
+    constructor(x: number, y: number, charClassId: string = 'standard') {
         super(x, y);
         const config = ConfigManager.getConfig();
-        this.maxHp = config.hero.base_hp;
+        const charClass = CHARACTER_CLASSES.find(c => c.id === charClassId) || CHARACTER_CLASSES[0];
+
+        this.baseMoveSpeed = charClass.speed;
+        this.speed = charClass.speed;
+        this.maxHp = charClass.hp;
         this.hp = this.maxHp;
 
-        this.stamina = config.hero.stamina.base;
-        this.maxStamina = config.hero.stamina.base;
+        this.stamina = charClass.stam;
+        this.maxStamina = charClass.stam;
 
         this.maxAmmo = config.blaster.magazine_size;
         this.ammo = this.maxAmmo;
         this.multishot = config.blaster.multishot_count;
 
         this.color = '#0088FF'; // Blue
-        this.hatColor = Hero.defaultHatColor; // Apply global choice on instantiate
+        Hero.defaultHatColor = charClass.color;
+        this.hatColor = Hero.defaultHatColor;
     }
 
 
@@ -182,7 +193,28 @@ export class Hero extends Entity {
             isShooting = input.mouse.leftDown;
         }
 
-        if (isShooting && this.fireTimer <= 0 && this.reloadTimer <= 0) {
+        let triggerShot = false;
+
+        if (this.currentWeapon === 'laser') {
+            if (isShooting && this.reloadTimer <= 0 && this.ammo > 0) {
+                this.charge += dt / 0.8; // 0.8 seconds to fully charge
+                if (this.charge > 1.0) this.charge = 1.0;
+                this.wasShootingLaser = true;
+            } else {
+                if (this.wasShootingLaser && this.charge > 0 && this.fireTimer <= 0) {
+                    triggerShot = true;
+                    this.lastFiredCharge = this.charge;
+                }
+                this.charge = 0;
+                this.wasShootingLaser = false;
+            }
+        } else {
+            if (isShooting && this.fireTimer <= 0 && this.reloadTimer <= 0) {
+                triggerShot = true;
+            }
+        }
+
+        if (triggerShot) {
             if (this.ammo > 0) {
                 this.ammo--;
                 this.fireTimer = this.weaponFireRate;
@@ -217,11 +249,13 @@ export class Hero extends Entity {
 
                 for (let i = 0; i < totalMultishot; i++) {
                     const offset = (i - (totalMultishot - 1) / 2) * spread;
-                    const angle = baseAngle + offset;
+                    const randomJitter = this.currentWeapon === 'shotgun' ? (Math.random() - 0.5) * spread * 0.85 : 0;
+                    const angle = baseAngle + offset + randomJitter;
                     const targetX = spawnX + Math.cos(angle) * config.blaster.multishot_target_distance;
                     const targetY = spawnY + Math.sin(angle) * config.blaster.multishot_target_distance;
 
-                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY, this.critChance, this.currentWeapon, this.weaponDamage, finalSpeed, this.weaponRange));
+                    const actualDamage = this.currentWeapon === 'laser' ? this.weaponDamage * Math.max(0.1, this.lastFiredCharge) : this.weaponDamage;
+                    game.bullets.push(new Bullet(spawnX, spawnY, targetX, targetY, this.critChance, this.currentWeapon, actualDamage, finalSpeed, this.weaponRange));
                 }
 
                 // Apply Recoil Pushback
@@ -229,6 +263,7 @@ export class Hero extends Entity {
                 if (this.currentWeapon === 'shotgun') recoilForce = 3.0; // Reduced from 12.0
                 if (this.currentWeapon === 'smg') recoilForce = 0.2; // Reduced from 1.0
                 if (this.currentWeapon === 'rifle') recoilForce = 1.5; // Reduced from 6.0
+                if (this.currentWeapon === 'laser') recoilForce = 4.0;
 
                 this.recoilVelocity.x -= Math.cos(baseAngle) * recoilForce;
                 this.recoilVelocity.y -= Math.sin(baseAngle) * recoilForce;
@@ -261,7 +296,7 @@ export class Hero extends Entity {
                 this.stamina -= config.abilities.dash.stamina_cost;
             } else {
                 // Move
-                const moveSpeed = config.hero.move_speed;
+                const moveSpeed = this.speed;
                 this.x += axis.x * moveSpeed * dt;
                 this.y += axis.y * moveSpeed * dt;
             }
@@ -702,9 +737,11 @@ export class Hero extends Entity {
         if (this.currentWeapon === 'smg') {
             scaleX = 2.4; scaleY = 2.4;
         } else if (this.currentWeapon === 'shotgun') {
-            scaleX = 3.6; scaleY = 2.8;
+            scaleX = 2.4; scaleY = 1.9;
         } else if (this.currentWeapon === 'rifle') {
             scaleX = 3.2; scaleY = 2.4;
+        } else if (this.currentWeapon === 'laser') {
+            scaleX = 3.5; scaleY = 3.0;
         } else {
             scaleX = 2.0; scaleY = 2.0; // Pistol baseline
         }
@@ -869,6 +906,26 @@ export class Hero extends Entity {
             ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
             ctx.beginPath(); ctx.arc(0.02, 0.12, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back grip
             ctx.beginPath(); ctx.arc(0.05, 0.15, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front hand (also on grip)
+        } else if (this.currentWeapon === 'laser') {
+            // Laser Cannon: Sleek, sci-fi, dynamic based on charge
+            ctx.fillStyle = '#1A1A24'; ctx.strokeStyle = '#00F'; ctx.lineWidth = 0.01;
+            ctx.beginPath(); ctx.roundRect(-0.25, -0.06, 0.45, 0.12, 0.02); ctx.fill(); ctx.stroke(); // Main body
+            
+            // Glow core filling up
+            ctx.fillStyle = `rgba(0, 255, 255, ${0.2 + this.charge * 0.8})`;
+            ctx.beginPath(); ctx.roundRect(-0.15, -0.03, 0.3 * this.charge, 0.06, 0.01); ctx.fill();
+            
+            // Barrels
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0.2, -0.04, 0.2, 0.08); // Thick barrel
+            ctx.fillStyle = this.charge >= 1.0 ? '#FF00FF' : '#00FFFF';
+            const heatWidth = 0.18 * (this.charge + 0.1); // Add a minimum visible length
+            ctx.fillRect(0.21, -0.02, heatWidth, 0.04); // Beam core in barrel
+            
+            // Hand grips
+            ctx.fillStyle = '#FFCDB2'; ctx.strokeStyle = '#E5989B'; ctx.lineWidth = 0.01;
+            ctx.beginPath(); ctx.arc(-0.12, 0.1, 0.06, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Back hand
+            ctx.beginPath(); ctx.arc(0.12, 0.08, 0.05, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); // Front hand
         }
 
         ctx.restore(); // End Weapon Scale
@@ -890,6 +947,7 @@ export class Hero extends Entity {
             if (this.currentWeapon === 'shotgun') flashSize = 1.0 * fScale;
             if (this.currentWeapon === 'rifle') flashSize = 0.8 * fScale;
             if (this.currentWeapon === 'smg') flashSize = 0.5 * fScale;
+            if (this.currentWeapon === 'laser') flashSize = 1.5 * fScale;
 
             // Flash Core (White Star)
             ctx.fillStyle = '#FFF';

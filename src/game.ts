@@ -21,9 +21,16 @@ export interface UpgradeOption {
 const WEAPON_STATS: { [id: string]: { damage: number, fireRate: number, range: number, magSize: number, reloadTime: number, spread: number, multishot: number, bulletSpeed: number } } = {
     pistol: { damage: 10, fireRate: 0.22, range: 25, magSize: 10, reloadTime: 0.8, spread: 0, multishot: 1, bulletSpeed: 25 },
     smg: { damage: 4, fireRate: 0.12, range: 15, magSize: 20, reloadTime: 1.0, spread: 0.08, multishot: 1, bulletSpeed: 28 },
-    shotgun: { damage: 14, fireRate: 0.45, range: 12, magSize: 6, reloadTime: 1.4, spread: 0.12, multishot: 5, bulletSpeed: 22 },
-    rifle: { damage: 25, fireRate: 0.35, range: 35, magSize: 8, reloadTime: 1.6, spread: 0, multishot: 1, bulletSpeed: 30 },
+    shotgun: { damage: 14, fireRate: 0.75, range: 12, magSize: 6, reloadTime: 0.8, spread: 0.12, multishot: 5, bulletSpeed: 22 },
+    rifle: { damage: 25, fireRate: 0.65, range: 35, magSize: 8, reloadTime: 1.6, spread: 0, multishot: 1, bulletSpeed: 30 },
+    laser: { damage: 30, fireRate: 1.5, range: 50, magSize: 4, reloadTime: 2.0, spread: 0, multishot: 1, bulletSpeed: 60 },
 };
+
+export const CHARACTER_CLASSES = [
+    { id: 'standard', name: 'STANDARD', desc: 'Balanced stats.', hp: 100, stam: 150, speed: 10.0, color: '#3388FF' },
+    { id: 'tank', name: 'TANK', desc: 'Extreme health, slow.', hp: 250, stam: 100, speed: 7.0, color: '#FF3333' },
+    { id: 'runner', name: 'RUNNER', desc: 'Fast, stamina-heavy.', hp: 60, stam: 300, speed: 13.0, color: '#33FF55' }
+];
 
 export class Game {
     private lastTime: number = 0;
@@ -31,6 +38,7 @@ export class Game {
     private isRunning: boolean = false;
 
     public hero: Hero;
+    public selectedCharacterId: string = 'standard';
     public enemies: Enemy[] = [];
     public bombs: Bomb[] = [];
     public bullets: Bullet[] = [];
@@ -39,7 +47,7 @@ export class Game {
 
     public score: number = 0;
     public coinCount: number = 0;
-    public combos: { x: number, y: number, text: string, timer: number }[] = [];
+    public combos: { x: number, y: number, text: string, timer: number, color?: string }[] = [];
     public currentShopOptions: UpgradeOption[] = [];
     public rerollCost: number = 20;
     public shopCooldown: number = 0;
@@ -167,7 +175,7 @@ export class Game {
 
     public restart() {
         const config = ConfigManager.getConfig();
-        this.hero = new Hero(0, 0);
+        this.hero = new Hero(0, 0, this.selectedCharacterId);
         this.enemies = [];
         this.bombs = [];
         this.bullets = [];
@@ -206,8 +214,8 @@ export class Game {
         }
     }
 
-    public addComboText(text: string, x: number, y: number) {
-        this.combos.push({ x, y, text, timer: 1.0 });
+    public addComboText(text: string, x: number, y: number, color: string = '#00FF00') {
+        this.combos.push({ x, y, text, timer: 1.0, color });
     }
 
     private buyUpgrade(index: number) {
@@ -275,7 +283,9 @@ export class Game {
             // PER USER REQUEST:
             // Auto-refresh the shop immediately after any purchase!
             // We just regenerate the options so the player can buy endlessly
-            this.generateUpgradeOptions();
+            if (opt.type !== 'weapon') {
+                this.generateUpgradeOptions();
+            }
 
             // MANUAL DEPLOY ONLY: Removed triggerNextPhase()
         } else {
@@ -399,35 +409,37 @@ export class Game {
                     const inStartBtn = Math.abs(mx - cx) < 140 && Math.abs(my - (h / 2)) < 27.5;
                     const inIndexBtn = Math.abs(mx - cx) < 140 && Math.abs(my - (h / 2 + 70)) < 27.5;
                     
-                    // Color Swatches Hit Detection
-                    const colors = ['#FF3333', '#3388FF', '#33FF55', '#FFCC00', '#B833FF'];
-                    const swatchSize = 40;
-                    const swatchGap = 15;
-                    const totalWidth = (colors.length * swatchSize) + ((colors.length - 1) * swatchGap);
-                    const startX = cx - totalWidth / 2;
-                    const swatchY = (h / 2) + 140;
+                    // Char cards Hit Detection
+                    const cardW = 200;
+                    const cardH = 250;
+                    const spacing = 30;
+                    const totalW = 3 * cardW + 2 * spacing;
+                    const startX = cx - totalW / 2 + cardW / 2;
+                    const cardY = h / 2 - 200;
 
-                    let swatchClicked = false;
+                    let cardClicked = false;
                     if (clickHappened) {
-                        for (let i = 0; i < colors.length; i++) {
-                            const x = startX + i * (swatchSize + swatchGap);
-                            if (mx >= x && mx <= x + swatchSize && my >= swatchY && my <= swatchY + swatchSize) {
-                                Hero.defaultHatColor = colors[i];
-                                this.hero.hatColor = colors[i]; // Update immediately for preview
-                                swatchClicked = true;
+                        for (let i = 0; i < CHARACTER_CLASSES.length; i++) {
+                            const cardX = startX + i * (cardW + spacing);
+                            if (Math.abs(mx - cardX) < cardW / 2 && Math.abs(my - cardY) < cardH / 2) {
+                                this.selectedCharacterId = CHARACTER_CLASSES[i].id;
+                                this.hero = new Hero(0, 0, this.selectedCharacterId);
+                                cardClicked = true;
+                                AudioManager.playBuy();
                                 break;
                             }
                         }
                     }
 
                     if (isKeyboard || inStartBtn) {
+                        this.restart(); // Will spawn hero with selected class explicitly
                         this.waveManager.triggerNextPhase();
                         this.shopCooldown = config.ui.shop.cooldown_after_start;
                         input.keys['enter'] = false;
                         return;
                     }
 
-                    if (!swatchClicked && inIndexBtn) {
+                    if (!cardClicked && inIndexBtn) {
                         this.waveManager.openIndex();
                         return;
                     }
@@ -496,19 +508,38 @@ export class Game {
                     }
 
                     const cardsPerRow = 3;
-                    const totalWidth = (cardWidth * cardsPerRow) + (spacing * (cardsPerRow - 1));
-                    const startX = cx - totalWidth / 2;
                     const optionsCount = this.currentShopOptions.length;
+
+                    let weaponsCount = 0;
+                    for (let i = 0; i < optionsCount; i++) {
+                        if (this.currentShopOptions[i] && this.currentShopOptions[i].type === 'weapon') weaponsCount++;
+                    }
 
                     for (let i = 0; i < optionsCount; i++) {
                         const opt = this.currentShopOptions[i];
                         if (!opt) continue;
 
-                        const row = Math.floor(i / cardsPerRow);
-                        const col = i % cardsPerRow;
+                        const isWeapon = opt.type === 'weapon';
+                        let gridIndex = i;
+                        let sectionStartY = startY;
+                        let itemsInGroup = weaponsCount;
 
-                        const x = startX + col * (cardWidth + spacing);
-                        const y = startY + row * (cardHeight + spacing);
+                        if (!isWeapon) {
+                            gridIndex = i - weaponsCount;
+                            itemsInGroup = optionsCount - weaponsCount;
+                            const weaponsRows = Math.ceil(Math.max(1, weaponsCount) / cardsPerRow);
+                            sectionStartY = startY + weaponsRows * (cardHeight + spacing) + 60;
+                        }
+
+                        const row = Math.floor(gridIndex / cardsPerRow);
+                        const col = gridIndex % cardsPerRow;
+
+                        const itemsInThisRow = Math.min(cardsPerRow, itemsInGroup - row * cardsPerRow);
+                        const rowWidth = (itemsInThisRow * cardWidth) + (spacing * (itemsInThisRow - 1));
+                        const currentStartX = cx - rowWidth / 2;
+
+                        const x = currentStartX + col * (cardWidth + spacing);
+                        const y = sectionStartY + row * (cardHeight + spacing);
 
                         if (mx >= x && mx <= x + cardWidth && my >= y && my <= y + cardHeight) {
                             this.buyUpgrade(i);
@@ -517,8 +548,11 @@ export class Game {
                     }
 
                     // Reroll Hit Detection
-                    const rowCount = Math.ceil(optionsCount / cardsPerRow);
-                    const rerollBtnY = startY + rowCount * (cardHeight + spacing) - spacing + 30;
+                    const upgradesCount = optionsCount - weaponsCount;
+                    const weaponsRows = Math.ceil(weaponsCount / cardsPerRow);
+                    const upgradesRows = Math.ceil(upgradesCount / cardsPerRow);
+                    const totalHeight = weaponsRows * (cardHeight + spacing) + (upgradesCount > 0 ? 60 + upgradesRows * (cardHeight + spacing) : 0);
+                    const rerollBtnY = startY + totalHeight - spacing + 30;
                     const inRerollBtn = Math.abs(mx - cx) < 100 && Math.abs(my - rerollBtnY) < 22;
                     if (inRerollBtn && this.coinCount >= this.rerollCost) {
                         this.rerollShop();

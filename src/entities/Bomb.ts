@@ -106,7 +106,11 @@ export class Bomb extends Entity {
     public arm() {
         if (this.state === BombState.IDLE) {
             this.state = BombState.ARMED;
-            this.timer = ConfigManager.getConfig().bomb.countdown_duration;
+            let duration = ConfigManager.getConfig().bomb.countdown_duration;
+            if (this.parent && this.parent instanceof TankEnemy) {
+                duration *= 2.0; // Increased timer for Tanks
+            }
+            this.timer = duration;
         }
     }
 
@@ -178,9 +182,9 @@ export class Bomb extends Entity {
 
                 if (enemy.bomb && enemy.bomb.state !== BombState.EXPLODING && enemy.bomb.state !== BombState.DEAD) {
                     if (enemy instanceof TankEnemy) {
-                        // Juggernaut: activate bomb at 50% countdown
+                        // Juggernaut: activate bomb at 50% countdown (but since base is 2x, use 1.0)
                         enemy.bomb.arm();
-                        enemy.bomb.timer = Math.min(enemy.bomb.timer, config.bomb.countdown_duration * 0.5);
+                        enemy.bomb.timer = Math.min(enemy.bomb.timer, config.bomb.countdown_duration * 1.0);
                     } else {
                         // All other enemies: instant chain explosion
                         enemy.bomb.explode(game);
